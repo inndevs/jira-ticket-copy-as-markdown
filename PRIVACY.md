@@ -1,8 +1,8 @@
 # Privacy
 
-Jira Ticket – Copy as Markdown is maintained by inndevs. Updated November 5, 2026.
+Jira Ticket – Copy as Markdown is maintained by inndevs. Updated November 16, 2026.
 
-Opening the extension reads the current Jira issue and copies Markdown. Data includes the issue URL, title, description, fields, comments, names, and attachment links. Issue content may contain personal information. Export options affect the output; available issue data is read regardless of those options.
+Opening the extension reads the current Jira issue and copies Markdown. Data includes the issue URL, title, description, fields, comments, names, attachment links, and linked commits and pull requests, including messages, authors, repositories, branches, and statuses. Issue content may contain personal information. Export options affect the output; available issue data is read regardless of those options.
 
 Requests go to the current HTTPS Jira site using your existing session. The extension does not read or store passwords, tokens, or cookies. If the API fails, it reads visible issue content. It does not access browser history or monitor other tabs.
 

@@ -25,7 +25,7 @@ function showIssue() {
   find('issue-key').textContent = issue.key;
   find('issue-title').textContent = issue.title;
   find('issue-type').textContent = issue.fields.find((field) => field.name === 'Type')?.value || '';
-  find('issue-counts').textContent = `${issue.comments.length} comments · ${issue.attachments.length} attachments`;
+  find('issue-counts').textContent = `${issue.comments.length} comments · ${issue.attachments.length} attachments · ${issue.commits?.length || 0} commits · ${issue.pullRequests?.length || 0} PRs`;
   find('warnings').textContent = (issue.warnings || []).join(' ');
   find('warnings').hidden = !issue.warnings?.length;
   markdown();

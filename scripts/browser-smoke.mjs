@@ -13,7 +13,7 @@ const apiComments = [1, 2].map(id => ({
   created: `2026-11-0${id}T10:00:00.000Z`, body: adf(paragraph(`Synthetic reply ${id}`)),
 }));
 const apiIssue = {
-  key: 'DEMO-42', names: { customfield_10001: 'Story points' },
+  id: '1042', key: 'DEMO-42', names: { customfield_10001: 'Story points' },
   fields: {
     summary: 'Synthetic API issue', issuetype: { name: 'Task' }, status: { name: 'In progress' },
     description: adf(paragraph('Synthetic API description'), {
@@ -23,6 +23,23 @@ const apiIssue = {
     attachment: [{ id: '7', filename: 'diagram.png', mimeType: 'image/png', size: 321,
       content: `${fixtureOrigin}/secure/attachment/7/diagram.png?token=a%2Bb&download=1` }],
     comment: { total: 2, comments: [apiComments[0]] },
+  },
+};
+const repository = { name: 'synthetic-repo', url: 'https://code.example.invalid/projects/DEMO/repos/synthetic-repo' };
+const apiCommit = {
+  id: 'abc123456789', displayId: 'abc1234', message: 'Synthetic commit subject\n\nFull synthetic commit body.',
+  url: `${repository.url}/commits/abc123456789`, author: { name: 'Fixture developer' },
+  authorTimestamp: '2026-11-03T12:00:00Z',
+};
+const apiPullRequest = {
+  id: '#123', name: 'Synthetic pull request', status: 'MERGED', author: { name: 'Fixture reviewer' },
+  url: `${repository.url}/pull-requests/123`,
+  source: { branch: 'feature/DEMO-42', repository }, destination: { branch: 'main', repository },
+};
+const developmentSummary = {
+  errors: [], summary: {
+    repository: { overall: { count: 1 }, byInstanceType: { stash: { count: 1, name: 'Bitbucket' } } },
+    pullrequest: { overall: { count: 1, details: { total: 1 } }, byInstanceType: { stash: { count: 1, name: 'Bitbucket' } } },
   },
 };
 
@@ -76,6 +93,17 @@ try {
       } else if (url.pathname === '/rest/api/3/issue/DEMO-42/comment') {
         const start = Number(url.searchParams.get('startAt'));
         body = JSON.stringify({ startAt: start, maxResults: 1, total: 2, comments: apiComments.slice(start, start + 1) });
+      } else if (url.pathname === '/rest/dev-status/1.0/issue/summary') {
+        assert.equal(url.searchParams.get('issueId'), apiIssue.id);
+        body = JSON.stringify(developmentSummary);
+      } else if (url.pathname === '/rest/dev-status/1.0/issue/detail') {
+        assert.equal(url.searchParams.get('issueId'), apiIssue.id);
+        assert.equal(url.searchParams.get('applicationType'), 'stash');
+        const type = url.searchParams.get('dataType');
+        assert.ok(['repository', 'pullrequest'].includes(type));
+        body = JSON.stringify({ errors: [], detail: [type === 'repository'
+          ? { repositories: [{ ...repository, commits: [apiCommit, apiCommit] }] }
+          : { pullRequests: [apiPullRequest, apiPullRequest], repositories: [] }] });
       } else {
         status = 404;
         body = '{}';
@@ -138,36 +166,69 @@ try {
   assert.match(opened.markdown, /Synthetic reply 2/);
   assert.equal(opened.markdown.match(/Synthetic reply 1/g)?.length, 1, 'Embedded and fetched comments must be deduplicated');
   assert.match(opened.markdown, /!\[diagram\.png\]\(https:\/\/demo\.atlassian\.net\/secure\/attachment\/7\/diagram\.png\?token=a%2Bb&download=1\)/);
+  assert.match(opened.markdown, /^## Commits$/m);
+  assert.match(opened.markdown, /https:\/\/code\.example\.invalid\/projects\/DEMO\/repos\/synthetic-repo\/commits\/abc123456789/);
+  assert.match(opened.markdown, /Synthetic commit subject\n\nFull synthetic commit body\./);
+  assert.match(opened.markdown, /Fixture developer/);
+  assert.match(opened.markdown, /^## Pull requests$/m);
+  assert.match(opened.markdown, /https:\/\/code\.example\.invalid\/projects\/DEMO\/repos\/synthetic-repo\/pull-requests\/123/);
+  assert.match(opened.markdown, /MERGED/);
+  assert.match(opened.markdown, /feature\/DEMO-42/);
+  assert.match(opened.markdown, /main/);
+  assert.equal(opened.markdown.match(/Synthetic commit subject/g)?.length, 1, 'Repeated development commits must be deduplicated');
+  assert.equal(opened.markdown.match(/Synthetic pull request/g)?.length, 1, 'Repeated pull requests must be deduplicated');
+  assert.match(await browser.evaluate(opened.sessionId, 'document.querySelector("#issue-counts").textContent'), /1 commits.*1 PRs/);
   assert.ok(!opened.markdown.includes('Additional fields'));
   assert.deepEqual(requests.filter(request => request.url.includes('/comment?')).map(request => new URL(request.url).searchParams.get('startAt')), ['0', '1']);
+  assert.equal(requests.filter(request => request.url.includes('/rest/dev-status/')).length, 3, 'Development discovery fetches summary and both detail types');
   // Only the harness receives read permission, after the initial write has
   // succeeded with the extension's original clipboardWrite permission.
   await browser.call('Browser.setPermission', { permission: { name: 'clipboard-read', allowWithoutGesture: true },
     setting: 'granted', origin: `chrome-extension://${extensionId}` });
   assert.equal(await clipboard(opened), opened.markdown, 'Initial popup action must write its generated Markdown');
-  console.log('PASS action grants activeTab, extracts API data, paginates comments, and automatically copies');
+  console.log('PASS action grants activeTab, extracts API data, paginates comments, deduplicates commits and PRs, and automatically copies');
 
   const originalClipboard = opened.markdown;
   await checkbox(opened, 'comments');
   await checkbox(opened, 'fields');
+  await checkbox(opened, 'commits');
   assert.equal(await clipboard(opened), originalClipboard, 'Changing options alone must not overwrite the clipboard');
   const revised = await copyAgain(opened);
   assert.ok(!revised.includes('## Comments'));
+  assert.ok(!revised.includes('## Commits'));
+  assert.match(revised, /^## Pull requests$/m, 'Commit option must leave pull requests enabled');
   assert.match(revised, /\| Story points \| 8 \|/);
   assert.equal(await clipboard(opened), revised);
   await until(async () => {
     const data = await browser.evaluate(opened.sessionId, 'chrome.storage.local.get("options")');
-    return data.options?.comments === false && data.options?.fields === true;
+    return data.options?.comments === false && data.options?.fields === true && data.options?.commits === false;
   }, 'saved options');
   await closePopup(opened);
   opened = await popup();
   assert.equal(await browser.evaluate(opened.sessionId, 'document.querySelector("input[name=comments]").checked'), false);
   assert.equal(await browser.evaluate(opened.sessionId, 'document.querySelector("input[name=fields]").checked'), true);
+  assert.equal(await browser.evaluate(opened.sessionId, 'document.querySelector("input[name=commits]").checked'), false);
+  assert.equal(await browser.evaluate(opened.sessionId, 'document.querySelector("input[name=pullRequests]").checked'), true);
   assert.equal(opened.markdown, revised, 'Reopened popup must use saved preferences');
   assert.equal(await clipboard(opened), revised);
+  await checkbox(opened, 'pullRequests');
+  const withoutDevelopment = await copyAgain(opened);
+  assert.ok(!withoutDevelopment.includes('## Commits'));
+  assert.ok(!withoutDevelopment.includes('## Pull requests'));
+  await until(async () => {
+    const data = await browser.evaluate(opened.sessionId, 'chrome.storage.local.get("options")');
+    return data.options?.pullRequests === false;
+  }, 'saved pull request option');
+  await closePopup(opened);
+  opened = await popup();
+  assert.equal(await browser.evaluate(opened.sessionId, 'document.querySelector("input[name=pullRequests]").checked'), false);
+  assert.equal(opened.markdown, withoutDevelopment, 'Pull request option persists across popup reopen');
+  assert.equal(await clipboard(opened), withoutDevelopment);
   console.log('PASS option changes require re-copy and persist across popup reopen');
 
   await checkbox(opened, 'comments');
+  await checkbox(opened, 'commits');
+  await checkbox(opened, 'pullRequests');
   await copyAgain(opened);
   await closePopup(opened);
   scenario = 'dom';

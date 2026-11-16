@@ -161,6 +161,110 @@
     return [issue?.key, issue?.fields?.summary].filter(Boolean).join(" — ");
   }
 
+  function developmentEndpoint(current, version, resource, params) {
+    const url = new URL(`${current.context}/rest/dev-status/${version}/issue/${resource}`, current.origin);
+    if (url.origin !== current.origin) throw new Error("Jira API requests must stay on the current site.");
+    for (const [name, value] of Object.entries(params)) url.searchParams.set(name, String(value));
+    return url.href;
+  }
+
+  const hasErrors = value => value != null && (typeof value === "object" ? Object.keys(value).length > 0 : Boolean(value));
+
+  async function developmentFor(current, issue, data = {}) {
+    issue.commits = [];
+    issue.pullRequests = [];
+    // The panel's cached summary is useful when the summary API is unavailable.
+    // Only trust a panel belonging to the issue being exported.
+    const fresh = currentIssue();
+    const panel = fresh.key === current.key && fresh.view.summary
+      ? first(fresh.view.scope, '#devstatus-container[data-issue-id]') : null;
+    const matchingPanel = panel?.getAttribute("data-issue-key") === current.key ? panel : null;
+    const issueId = String(data.id || matchingPanel?.getAttribute("data-issue-id") || "");
+    if (!/^\d+$/.test(issueId)) return;
+    let cached;
+    try {
+      const raw = JSON.parse((matchingPanel && first(matchingPanel, '.dev-summary[data-json]')?.getAttribute("data-json")) || "null");
+      cached = raw?.cachedValue || raw;
+    } catch {}
+    let version = "1.0";
+    let summary;
+    try {
+      let result;
+      try { result = await getJSON(developmentEndpoint(current, version, "summary", { issueId })); }
+      catch (error) {
+        if (!unsupported(error)) throw error;
+        version = "latest";
+        result = await getJSON(developmentEndpoint(current, version, "summary", { issueId }));
+      }
+      if (!result?.summary || typeof result.summary !== "object") throw new ApiError("Jira returned an invalid development summary");
+      summary = result.summary;
+      if (hasErrors(result.errors) || hasErrors(result.configErrors)) issue.warnings.push("Jira reported development integration errors; commits and pull requests may be incomplete.");
+    } catch (error) {
+      summary = cached?.summary;
+      if (summary || !unsupported(error)) issue.warnings.push(`Could not retrieve the development summary (${error.message}). Commits and pull requests may be incomplete.`);
+      if (!summary) return;
+    }
+
+    const seen = { commits: new Set(), pullRequests: new Set() };
+    const add = (kind, item, repositoryId) => {
+      const identity = item.url || (item.id ? `${repositoryId}\n${item.id}` : "");
+      if (!identity || seen[kind].has(identity)) return;
+      seen[kind].add(identity);
+      issue[kind].push(item);
+    };
+    const date = value => {
+      if (typeof value !== "number") return String(value || "");
+      const parsed = new Date(value);
+      return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : "";
+    };
+    // Providers come from Jira, including GitHub and Bitbucket integrations.
+    // Fetch each independently so one unavailable provider cannot discard others.
+    await Promise.all([["repository", "commits", "Commits"], ["pullrequest", "pullRequests", "Pull requests"]].map(async ([type, kind, label]) => {
+      const summaryItem = summary[type];
+      if (!summaryItem || typeof summaryItem !== "object") return;
+      const providers = Object.keys(summaryItem.byInstanceType || {});
+      const expected = summaryItem.overall?.details?.total ?? summaryItem.overall?.count;
+      if (!providers.length) {
+        if (expected > 0) issue.warnings.push(`${label} may be incomplete: Jira reported ${expected} but did not identify a development provider.`);
+        return;
+      }
+      for (const provider of providers) {
+        try {
+          const result = await getJSON(developmentEndpoint(current, version, "detail", { issueId, applicationType: provider, dataType: type }));
+          if (!Array.isArray(result?.detail)) throw new ApiError("Jira returned invalid development details");
+          if (hasErrors(result.errors)) issue.warnings.push(`${label} from ${provider} may be incomplete: Jira reported development integration errors.`);
+          for (const detail of result.detail) {
+            const instance = detail._instance?.id || provider;
+            if (kind === "commits") {
+              if (!Array.isArray(detail.repositories)) throw new ApiError("Jira returned invalid repository details");
+              for (const repo of detail.repositories) {
+                if (!Array.isArray(repo.commits)) throw new ApiError("Jira returned invalid commit details");
+                for (const commit of repo.commits) add(kind, {
+                  id: String(commit.id || ""), displayId: String(commit.displayId || ""),
+                  message: String(commit.message || ""), url: String(commit.url || ""),
+                  author: display(commit.author), date: date(commit.authorTimestamp), repository: String(repo.name || ""),
+                }, `${instance}\n${repo.url || repo.name || ""}`);
+              }
+            } else {
+              if (!Array.isArray(detail.pullRequests)) throw new ApiError("Jira returned invalid pull request details");
+              for (const pr of detail.pullRequests) {
+                const repo = pr.destination?.repository || pr.source?.repository || {};
+                add(kind, {
+                  id: String(pr.id || ""), title: String(pr.name || pr.title || ""), url: String(pr.url || ""),
+                  status: String(pr.status || ""), author: display(pr.author), repository: String(repo.name || ""),
+                  sourceBranch: String(pr.source?.branch || ""), destinationBranch: String(pr.destination?.branch || ""),
+                }, `${instance}\n${repo.url || repo.name || ""}`);
+              }
+            }
+          }
+        } catch (error) {
+          issue.warnings.push(`Could not retrieve all ${label.toLowerCase()} from ${provider} (${error.message}).`);
+        }
+      }
+      if (Number.isFinite(expected) && issue[kind].length < expected) issue.warnings.push(`${label} may be incomplete: exported ${issue[kind].length} of ${expected}.`);
+    }));
+  }
+
   function normalizeIssue(data, current) {
     const raw = data.fields;
     const rendered = data.renderedFields || {};
@@ -261,9 +365,16 @@
         data = await getJSON(endpoint(current, version, "", { fields: "*all", expand: "names,renderedFields" }));
       }
       if (!data?.fields || typeof data.fields !== "object") throw new ApiError("Jira returned an invalid issue response");
-    } catch (error) { return readVisible(current, error); }
+    } catch (error) {
+      const issue = readVisible(current, error);
+      await developmentFor(current, issue);
+      return issue;
+    }
     const issue = normalizeIssue(data, current);
-    issue.comments = await commentsFor(current, version, data.fields.comment, issue.warnings);
+    await Promise.all([
+      commentsFor(current, version, data.fields.comment, issue.warnings).then(comments => { issue.comments = comments; }),
+      developmentFor(current, issue, data),
+    ]);
     if (!issue.warnings.length) delete issue.warnings;
     return issue;
   }

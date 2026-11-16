@@ -6,7 +6,7 @@ Jira Ticket – Copy as Markdown
 
 ## Description
 
-Copy a Jira ticket as Markdown with one click. Choose descriptions, metadata, comments, attachment links, extra sections, or custom fields. Preview the Markdown and save your preferences for next time.
+Copy a Jira ticket as Markdown with one click. Choose descriptions, metadata, comments, attachment links, commits, pull requests, extra sections, or custom fields. Commits include their full messages, authors, and repository links; pull requests include their status and branches. Preview the Markdown and save your preferences for next time.
 
 Uses your existing Jira session. If the API is unavailable, it exports visible page content and warns about missing details. Attachment links retain Jira's access controls.
 
@@ -35,7 +35,7 @@ No host permissions, background scripts, or remote executable code.
 
 ## Data disclosures
 
-- Website content: issue text, fields, comments, attachment metadata.
+- Website content: issue text, fields, comments, attachment metadata, linked commits and pull requests.
 - Personally identifiable information: names and personal information in issue content.
 - Personal communications: comments and authors.
 - Web history: current issue URL only; no browsing-history access.

@@ -1,6 +1,7 @@
 const DEFAULT_OPTIONS = {
   description: true, comments: true, metadata: true,
   attachments: true, fields: false, sections: true,
+  commits: true, pullRequests: true,
 };
 
 const array = (value) => Array.isArray(value) ? value : [];
@@ -336,6 +337,22 @@ export function renderIssue(issue = {}, options = {}) {
       const size = typeof attachment.size === "number" && Number.isFinite(attachment.size) ? ` (${attachment.size} bytes)` : "";
       return `- ${link(name, attachment.url, context)}${size}`;
     }).join("\n"));
+  }
+  if (include.commits) {
+    section("Commits", array(issue.commits).map((commit) => {
+      const heading = link(oneLine(commit.displayId || commit.id || "Commit"), commit.url, context);
+      const details = [commit.repository, commit.author, commit.date].filter(Boolean).map(oneLine).join(" · ");
+      return blocks([`### ${heading}`, details, escapeText(commit.message).trim()]);
+    }).join("\n\n"));
+  }
+  if (include.pullRequests) {
+    section("Pull requests", array(issue.pullRequests).map((request) => {
+      const label = [request.id ? `#${string(request.id).replace(/^#/, "")}` : "", request.title].filter(Boolean).join(" — ") || "Pull request";
+      const heading = link(oneLine(label), request.url, context);
+      const details = [request.status, request.author, request.repository].filter(Boolean).map(oneLine).join(" · ");
+      const branches = [request.sourceBranch, request.destinationBranch].filter(Boolean).map(oneLine).join(" → ");
+      return blocks([`### ${heading}`, details, branches ? `Branches: ${branches}` : ""]);
+    }).join("\n\n"));
   }
   if (include.comments) {
     section("Comments", array(issue.comments).map((comment) => {

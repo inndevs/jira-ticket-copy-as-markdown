@@ -120,11 +120,13 @@ const issue = {
   sections: [{ name: "Related issues", body: { text: "DEMO-11" } }],
   comments: [{ id: "1", author: "Test Person", created: "2026-11-05T10:00:00Z", body: { text: "A comment" } }],
   attachments: [{ id: "1", name: "spec.pdf", url: "/attachment/1?download=true", size: 1024 }],
+  commits: [{ id: "abc123456789", displayId: "abc1234", message: "Export development details\n\nKeep the full commit message.", url: "https://git.example.test/team/repo/commits/abc123456789", author: "Alex", date: "2026-11-05T09:00:00Z", repository: "team/repo" }],
+  pullRequests: [{ id: "42", title: "Add development export", url: "https://git.example.test/team/repo/pull-requests/42", status: "MERGED", author: "Alex", repository: "team/repo", sourceBranch: "feature/export", destinationBranch: "main" }],
 };
 
 test("issue defaults include all ordinary sections and omit opt-in custom fields", () => {
   const result = renderIssue(issue);
-  for (const expected of ["# DEMO-12 — Markdown export", `Source: [${baseUrl}](${baseUrl})`, "## Details", "| Status | In progress |", "## Description", "ADF description", "## Related issues", "## Attachments", "## Comments", "A comment"]) {
+  for (const expected of ["# DEMO-12 — Markdown export", `Source: [${baseUrl}](${baseUrl})`, "## Details", "| Status | In progress |", "## Description", "ADF description", "## Related issues", "## Attachments", "## Commits", "## Pull requests", "## Comments", "A comment"]) {
     assert.ok(result.includes(expected), `Missing: ${expected}`);
   }
   assert.ok(!result.includes("Additional fields"));
@@ -134,16 +136,47 @@ test("issue defaults include all ordinary sections and omit opt-in custom fields
 });
 
 test("options independently disable sections while keeping title and source", () => {
-  const result = renderIssue(issue, { description: false, comments: false, metadata: false, attachments: false, sections: false, fields: true });
+  const result = renderIssue(issue, { description: false, comments: false, metadata: false, attachments: false, sections: false, commits: false, pullRequests: false, fields: true });
   assert.ok(result.startsWith("# DEMO-12 — Markdown export\n\nSource:"));
   assert.ok(result.includes("## Additional fields\n\n| Field | Value |\n| --- | --- |\n| Team | One, Two |"));
-  for (const omitted of ["## Details", "## Description", "## Comments", "## Attachments", "## Related issues"]) assert.ok(!result.includes(omitted));
+  for (const omitted of ["## Details", "## Description", "## Comments", "## Attachments", "## Related issues", "## Commits", "## Pull requests"]) assert.ok(!result.includes(omitted));
+});
+
+test("development sections retain links, metadata, full commit messages and PR branches", () => {
+  const result = renderIssue(issue, { sections: false });
+  assert.ok(result.includes("### [abc1234](https://git.example.test/team/repo/commits/abc123456789)\n\nteam/repo · Alex · 2026-11-05T09:00:00Z\n\nExport development details\n\nKeep the full commit message."));
+  assert.ok(result.includes("### [\\#42 — Add development export](https://git.example.test/team/repo/pull-requests/42)\n\nMERGED · Alex · team/repo\n\nBranches: feature/export → main"));
+  assert.ok(!result.includes("## Related issues"));
+});
+
+test("commits and pull requests can each be disabled independently", () => {
+  const noCommits = renderIssue(issue, { commits: false });
+  assert.ok(!noCommits.includes("## Commits"));
+  assert.ok(noCommits.includes("## Pull requests"));
+  const noRequests = renderIssue(issue, { pullRequests: false });
+  assert.ok(noRequests.includes("## Commits"));
+  assert.ok(!noRequests.includes("## Pull requests"));
+});
+
+test("development data escapes literal Markdown and rejects unsafe links", () => {
+  const result = renderIssue({ url: baseUrl,
+    commits: [{ id: "abc", message: "# Heading\n\n*Literal* [message]\n- details", url: "/commit/abc (1)?a=1&b=2", author: "[Alex]", repository: "*repo*" }],
+    pullRequests: [{ id: "#7", title: "Fix [export]\nwithout a new heading", url: "javascript:alert(1)", sourceBranch: "feature/*", destinationBranch: "<main>" }],
+  });
+  assert.ok(result.includes("### [abc](https://example.atlassian.net/commit/abc%20%281%29?a=1&b=2)"));
+  assert.ok(result.includes("\\*repo\\* · \\[Alex\\]"));
+  assert.ok(result.includes("\\# Heading\n\n\\*Literal\\* \\[message\\]\n\\- details"));
+  assert.ok(result.includes("### \\#7 — Fix \\[export\\] without a new heading"));
+  assert.ok(result.includes("Branches: feature/\\* → \\<main\\>"));
+  assert.ok(!result.includes("javascript:"));
 });
 
 test("empty rich text falls back to text and absent normalized arrays are safe", () => {
   const result = renderIssue({ key: "DEMO-1", url: baseUrl, description: { adf: doc(), text: "Fallback" } });
   assert.ok(result.includes("## Description\n\nFallback"));
   assert.ok(!result.includes("undefined"));
+  assert.ok(!result.includes("## Commits"));
+  assert.ok(!result.includes("## Pull requests"));
   assert.equal(adfToMarkdown(null), "");
   assert.equal(adfToMarkdown({}), "");
 });

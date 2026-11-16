@@ -206,3 +206,212 @@ test("invalid context metadata cannot redirect authenticated requests off site",
   assert.equal(result.ok, true);
   for (const request of page.requests) assert.equal(new URL(request.url).origin, "https://example.atlassian.net");
 });
+
+const developmentIssue = (extra = {}) => ({ id: "10142", key: "TEAM-42", fields: {
+  summary: "Export development activity", description: adf("Keep the issue description"),
+  comment: { comments: [comment(1)], total: 1 },
+}, ...extra });
+const developmentSummary = ({ commits = 0, pullRequests = 0, repositories = {}, providers = {}, open = pullRequests } = {}) => ({
+  errors: [], summary: {
+    repository: { overall: { count: commits }, byInstanceType: repositories },
+    pullrequest: { overall: { count: open, details: { total: pullRequests } }, byInstanceType: providers },
+  },
+});
+
+test("development extraction normalizes multiple providers and deduplicates by URL or repository identity", async () => {
+  const sharedCommit = { id: "abcdef123456789", displayId: "abcdef1", message: "Add export\n\nPreserve the full message.", url: "https://git.example.test/team/repo/commits/abcdef123456789", author: { name: "Alex" }, authorTimestamp: 1791273600000 };
+  const stashRequest = { id: "7", title: "Add export", url: "https://git.example.test/team/repo/pull-requests/7", status: "MERGED", author: { displayName: "Alex" }, source: { branch: "feature/export", repository: { name: "team/repo" } }, destination: { branch: "main" } };
+  const page = browser({ fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ commits: 3, pullRequests: 2, open: 0, repositories: { stash: { count: 2 }, GitHub: { count: 2 } }, providers: { stash: { count: 1 }, GitHub: { count: 1 } } }));
+    assert.equal(url.pathname, "/rest/dev-status/1.0/issue/detail");
+    const provider = url.searchParams.get("applicationType");
+    if (url.searchParams.get("dataType") === "repository") {
+      return response({ errors: [], detail: [{ repositories: [{ name: provider === "stash" ? "team/repo" : "team/other", url: `https://git.example.test/${provider}`, commits: [sharedCommit, { id: "same-id", displayId: "same-id", message: "Distinct repository commit" }, sharedCommit] }] }] });
+    }
+    return response({ errors: [], detail: [{ pullRequests: [stashRequest, provider === "stash" ? stashRequest : { ...stashRequest, url: "https://github.example.test/team/repo/pull/7" }] }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.commits.length, 3);
+  assert.equal(result.issue.pullRequests.length, 2);
+  const commit = result.issue.commits.find(item => item.id === sharedCommit.id);
+  assert.equal(commit.displayId, "abcdef1");
+  assert.equal(commit.message, sharedCommit.message);
+  assert.equal(commit.url, sharedCommit.url);
+  assert.equal(commit.author, "Alex");
+  assert.equal(commit.date, "2026-10-06T08:00:00.000Z");
+  assert.ok(["team/repo", "team/other"].includes(commit.repository));
+  assert.deepEqual(Array.from(result.issue.commits.filter(item => item.id === "same-id"), item => item.repository).sort(), ["team/other", "team/repo"]);
+  const request = result.issue.pullRequests.find(item => item.url === stashRequest.url);
+  assert.equal(request.title, "Add export");
+  assert.equal(request.status, "MERGED");
+  assert.equal(request.author, "Alex");
+  assert.equal(request.repository, "team/repo");
+  assert.equal(request.sourceBranch, "feature/export");
+  assert.equal(request.destinationBranch, "main");
+  const details = page.requests.filter(item => new URL(item.url).pathname.endsWith("/detail"));
+  assert.equal(details.length, 4);
+  assert.ok(details.every(item => new URL(item.url).searchParams.get("issueId") === "10142"));
+  assert.deepEqual(details.map(item => `${new URL(item.url).searchParams.get("applicationType")}:${new URL(item.url).searchParams.get("dataType")}`).sort(), ["GitHub:pullrequest", "GitHub:repository", "stash:pullrequest", "stash:repository"]);
+  assert.equal(result.issue.warnings, undefined);
+});
+
+test("pull requests include open, merged and declined results using the summary total", async () => {
+  const page = browser({ fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ pullRequests: 3, open: 1, providers: { stash: { count: 1 } } }));
+    return response({ errors: [], detail: [{ pullRequests: ["OPEN", "MERGED", "DECLINED"].map((status, index) => ({ id: String(index + 1), title: `${status} request`, status, url: `https://git.example.test/repo/pull-requests/${index + 1}` })) }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.deepEqual(Array.from(result.issue.pullRequests, item => item.status).sort(), ["DECLINED", "MERGED", "OPEN"]);
+  assert.equal(result.issue.warnings, undefined);
+});
+
+test("a denied development provider preserves other provider data and issue content with a warning", async () => {
+  const page = browser({ fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ commits: 2, repositories: { stash: { count: 1 }, GitHub: { count: 1 } } }));
+    if (url.searchParams.get("applicationType") === "GitHub") return response({}, 403);
+    return response({ errors: [], detail: [{ repositories: [{ name: "repo", commits: [{ id: "abc", message: "Available commit", url: "https://git.example.test/repo/commits/abc" }] }] }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.title, "Export development activity");
+  assert.equal(result.issue.description.adf.content[0].content[0].text, "Keep the issue description");
+  assert.equal(result.issue.comments[0].id, "1");
+  assert.equal(result.issue.commits.length, 1);
+  assert.match(result.issue.warnings.join(" "), /403/);
+});
+
+test("missing development services are skipped after supported version fallbacks", async () => {
+  const page = browser({ fetch: rawURL => new URL(rawURL).pathname.includes("/rest/api/") ? response(developmentIssue()) : response({}, 404) });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.commits.length, 0);
+  assert.equal(result.issue.pullRequests.length, 0);
+  assert.equal(result.issue.warnings, undefined);
+  assert.deepEqual(page.requests.slice(1).map(item => new URL(item.url).pathname), ["/rest/dev-status/1.0/issue/summary", "/rest/dev-status/latest/issue/summary"]);
+});
+
+test("development permission failures are reported without losing the issue", async () => {
+  const page = browser({ fetch: rawURL => new URL(rawURL).pathname.includes("/rest/api/") ? response(developmentIssue()) : response({}, 403) });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.title, "Export development activity");
+  assert.match(result.issue.warnings.join(" "), /403/);
+  assert.equal(page.requests.length, 2);
+});
+
+test("development version fallback retains Jira context paths and authenticated same-origin GET requests", async () => {
+  const page = browser({ href: "https://jira.example.test/company/browse/TEAM-42", fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.includes("/dev-status/1.0/")) return response({}, 404);
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ commits: 1, repositories: { stash: { count: 1 } } }));
+    return response({ errors: [], detail: [{ repositories: [{ name: "repo", commits: [{ id: "abc", message: "Context path commit", url: "https://git.example.test/repo/commits/abc" }] }] }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.commits[0].message, "Context path commit");
+  assert.equal(result.issue.warnings, undefined);
+  assert.ok(page.requests.some(item => new URL(item.url).pathname === "/company/rest/dev-status/latest/issue/detail"));
+  for (const { url: rawURL, options } of page.requests) {
+    const url = new URL(rawURL);
+    assert.equal(url.origin, "https://jira.example.test");
+    assert.ok(url.pathname.startsWith("/company/rest/"));
+    assert.equal(options.credentials, "include");
+    assert.equal(options.method || "GET", "GET");
+    assert.equal(options.redirect, "error");
+  }
+});
+
+test("malformed development details warn about incomplete exports", async () => {
+  const page = browser({ fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ commits: 2, repositories: { stash: { count: 2 } } }));
+    return response({ detail: { repositories: [] } });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.commits.length, 0);
+  assert.ok(result.issue.warnings.length > 0);
+  assert.match(result.issue.warnings.join(" "), /invalid|incomplete/i);
+});
+
+test("development count mismatches report the exported and expected item counts", async () => {
+  const page = browser({ fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ pullRequests: 3, open: 1, providers: { stash: { count: 1 } } }));
+    return response({ errors: [], detail: [{ pullRequests: [{ id: "1", title: "Only one returned", status: "OPEN", url: "https://git.example.test/repo/pull-requests/1" }] }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.pullRequests.length, 1);
+  assert.match(result.issue.warnings.join(" "), /1 of 3/);
+});
+
+test("only a numeric issue ID enables development API requests", async () => {
+  const page = browser({ fetch: () => response(developmentIssue({ id: "//untrusted.example/42" })) });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(page.requests.length, 1);
+  assert.equal(result.issue.commits.length, 0);
+  assert.equal(result.issue.pullRequests.length, 0);
+});
+
+function developmentDocument(key, summary) {
+  const heading = node("Visible development issue");
+  const panel = node("", { "data-issue-id": "10142", "data-issue-key": key });
+  const cached = node("", { "data-json": JSON.stringify({ cachedValue: summary }) });
+  panel.querySelector = selector => selector.includes("dev-summary") ? cached : null;
+  return {
+    querySelectorAll: selector => selector.startsWith("#summary-val") ? [heading] : [],
+    querySelector: selector => selector.includes("devstatus-container") ? panel : null,
+  };
+}
+
+test("a matching development panel supplies the numeric issue ID during visible-page fallback", async () => {
+  const page = browser({ document: developmentDocument("TEAM-42"), fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response({}, 403);
+    assert.equal(url.searchParams.get("issueId"), "10142");
+    if (url.pathname.endsWith("/summary")) return response(developmentSummary({ commits: 1, repositories: { stash: { count: 1 } } }));
+    return response({ detail: [{ repositories: [{ name: "repo", commits: [{ id: "abc", message: "Fallback development", url: "https://git.example.test/repo/commits/abc" }] }] }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.title, "Visible development issue");
+  assert.equal(result.issue.commits[0].message, "Fallback development");
+  assert.match(result.issue.warnings.join(" "), /visible page content/);
+  assert.equal(page.requests.length, 3);
+});
+
+test("a stale development panel cannot supply another issue's ID or cached summary", async () => {
+  const page = browser({ document: developmentDocument("OTHER-1", developmentSummary({ commits: 1, repositories: { stash: { count: 1 } } })), fetch: () => response(developmentIssue({ id: undefined })) });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(page.requests.length, 1);
+  assert.equal(result.issue.commits.length, 0);
+  assert.equal(result.issue.warnings, undefined);
+});
+
+test("the matching panel's cached summary can recover development details when summary routes are unavailable", async () => {
+  const cached = developmentSummary({ pullRequests: 1, providers: { stash: { count: 1 } } });
+  const page = browser({ document: developmentDocument("TEAM-42", cached), fetch: rawURL => {
+    const url = new URL(rawURL);
+    if (url.pathname.includes("/rest/api/")) return response(developmentIssue());
+    if (url.pathname.endsWith("/summary")) return response({}, 404);
+    return response({ detail: [{ pullRequests: [{ id: "1", title: "Recovered request", status: "MERGED", url: "https://git.example.test/repo/pull-requests/1" }] }] });
+  } });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.equal(result.issue.pullRequests[0].title, "Recovered request");
+  assert.match(result.issue.warnings.join(" "), /summary.*404/i);
+});
