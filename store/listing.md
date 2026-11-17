@@ -2,17 +2,25 @@
 
 ## Name
 
-Jira Ticket – Copy as Markdown
+Jira to Markdown
+
+## Short description
+
+Copy Jira issues as clean Markdown. Keep the description, comments, commits, and pull requests in one paste.
 
 ## Description
 
-Copy a Jira ticket as Markdown with one click. Choose descriptions, metadata, comments, attachment links, commits, pull requests, extra sections, or custom fields. Commits include their full messages, authors, and repository links; pull requests include their status and branches. Preview the Markdown and save your preferences for next time.
+Copy Jira. Paste Markdown.
 
-Uses your existing Jira session. If the API is unavailable, it exports visible page content and warns about missing details. Attachment links retain Jira's access controls.
+Turn the open issue into clean Markdown for notes, docs, pull requests, and AI tools.
 
-Issue data is processed in your browser and copied to the clipboard. Only preferences are stored locally. No analytics, advertising, or developer servers.
+- Choose descriptions, comments, metadata, and attachment links.
+- Keep commits and PRs in compact tables with repository links.
+- Preview your export. Save your preferences.
 
-Independent open-source extension by inndevs. Not affiliated with Atlassian.
+Works with your Jira session. No API key or extra account. Your data stays in your browser and clipboard.
+
+Open source by inndevs. Not affiliated with Atlassian.
 
 ## Links
 
@@ -49,5 +57,7 @@ Open an HTTPS Jira issue using a test account. Click the extension, paste the Ma
 ## Assets
 
 - ZIP: `dist/jira-ticket-copy-as-markdown-VERSION.zip`
-- Icon: `icons/icon128.png`
+- Store icon: `icons/icon128.png`
+- Large icon: `icons/icon512.png`
 - Screenshot: `store/screenshot-1280x800.png`
+- Small promo tile: `store/promo-440x280.png`

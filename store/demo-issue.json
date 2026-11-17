@@ -3,9 +3,18 @@
   "url": "https://jira.example.org/browse/DEMO-42",
   "title": "Refresh the project handbook",
   "fields": [
-    { "name": "Type", "value": "Task" },
-    { "name": "Status", "value": "In progress" },
-    { "name": "Priority", "value": "Medium" }
+    {
+      "name": "Type",
+      "value": "Task"
+    },
+    {
+      "name": "Status",
+      "value": "In progress"
+    },
+    {
+      "name": "Priority",
+      "value": "Medium"
+    }
   ],
   "description": {
     "adf": {
@@ -14,30 +23,10 @@
       "content": [
         {
           "type": "paragraph",
-          "content": [{ "type": "text", "text": "Make the team handbook easier to navigate." }]
-        },
-        {
-          "type": "bulletList",
           "content": [
             {
-              "type": "listItem",
-              "content": [{
-                "type": "paragraph",
-                "content": [
-                  { "type": "text", "text": "Find answers faster.", "marks": [{ "type": "strong" }] },
-                  { "type": "text", "text": " Add a table of contents." }
-                ]
-              }]
-            },
-            {
-              "type": "listItem",
-              "content": [{
-                "type": "paragraph",
-                "content": [
-                  { "type": "text", "text": "Keep context.", "marks": [{ "type": "strong" }] },
-                  { "type": "text", "text": " Link the release checklist." }
-                ]
-              }]
+              "type": "text",
+              "text": "Make answers easier to find. Keep the release checklist close."
             }
           ]
         }
@@ -48,12 +37,16 @@
     {
       "author": "Demo teammate",
       "created": "2026-01-15",
-      "body": { "text": "The draft is ready for a review." }
+      "body": {
+        "text": "The draft is ready for a review."
+      }
     },
     {
       "author": "Demo reviewer",
       "created": "2026-01-16",
-      "body": { "text": "The new navigation makes the checklist easy to find." }
+      "body": {
+        "text": "The new navigation makes the checklist easy to find."
+      }
     }
   ],
   "attachments": [
@@ -72,7 +65,53 @@
       "size": 256
     }
   ],
-  "customFields": [{ "name": "Team", "value": "Documentation" }],
+  "customFields": [
+    {
+      "name": "Team",
+      "value": "Documentation"
+    }
+  ],
   "sections": [],
-  "warnings": []
+  "warnings": [],
+  "commits": [
+    {
+      "id": "a1b2c3d4e5f678901234567890abcdef12345678",
+      "displayId": "a1b2c3d",
+      "message": "Add handbook navigation",
+      "url": "https://code.example.org/projects/DEMO/repos/docs/commits/a1b2c3d4e5f678901234567890abcdef12345678",
+      "author": "Demo developer",
+      "date": "2026-11-03T14:20:00Z",
+      "repository": "docs"
+    },
+    {
+      "id": "a1b2c3d4e5f678901234567890abcdef12345678",
+      "displayId": "a1b2c3d",
+      "message": "Add handbook navigation",
+      "url": "https://code.example.org/projects/DEMO/repos/portal/commits/a1b2c3d4e5f678901234567890abcdef12345678",
+      "author": "Demo developer",
+      "date": "2026-11-03T14:20:00Z",
+      "repository": "portal"
+    },
+    {
+      "id": "e5f6a7b8c9d01234567890abcdef1234567890ab",
+      "displayId": "e5f6a7b",
+      "message": "Link the release checklist",
+      "url": "https://code.example.org/projects/DEMO/repos/docs/commits/e5f6a7b8c9d01234567890abcdef1234567890ab",
+      "author": "Demo developer",
+      "date": "2026-11-02T10:15:00Z",
+      "repository": "docs"
+    }
+  ],
+  "pullRequests": [
+    {
+      "id": "42",
+      "title": "Add handbook navigation",
+      "url": "https://code.example.org/projects/DEMO/repos/docs/pull-requests/42",
+      "status": "MERGED",
+      "author": "Demo developer",
+      "repository": "docs",
+      "sourceBranch": "feature/handbook",
+      "destinationBranch": "main"
+    }
+  ]
 }

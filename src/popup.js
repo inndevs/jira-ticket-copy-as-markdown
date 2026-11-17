@@ -1,5 +1,6 @@
 import { renderIssue } from './markdown.js';
 import { copyText } from './clipboard.js';
+import { countCommits } from './development.js';
 
 const find = (id) => document.getElementById(id);
 const inputs = [...document.querySelectorAll('input[type="checkbox"]')];
@@ -25,7 +26,10 @@ function showIssue() {
   find('issue-key').textContent = issue.key;
   find('issue-title').textContent = issue.title;
   find('issue-type').textContent = issue.fields.find((field) => field.name === 'Type')?.value || '';
-  find('issue-counts').textContent = `${issue.comments.length} comments · ${issue.attachments.length} attachments · ${issue.commits?.length || 0} commits · ${issue.pullRequests?.length || 0} PRs`;
+  find('issue-counts').textContent = [
+    [issue.comments.length, 'comment'], [issue.attachments.length, 'attachment'],
+    [countCommits(issue.commits, { baseUrl: issue.url }), 'commit'], [issue.pullRequests?.length || 0, 'PR'],
+  ].map(([count, label]) => `${count} ${label}${count === 1 ? '' : 's'}`).join(' · ');
   find('warnings').textContent = (issue.warnings || []).join(' ');
   find('warnings').hidden = !issue.warnings?.length;
   markdown();

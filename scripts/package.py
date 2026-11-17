@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_FILES = (
     "manifest.json", "popup.html", "popup.css",
     "src/popup.js", "src/clipboard.js", "src/markdown.js", "src/content.js",
+    "src/format.js", "src/development.js",
     "icons/icon16.png", "icons/icon32.png", "icons/icon48.png", "icons/icon128.png",
 )
 

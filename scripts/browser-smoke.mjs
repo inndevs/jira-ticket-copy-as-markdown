@@ -13,22 +13,26 @@ const apiComments = [1, 2].map(id => ({
   created: `2026-11-0${id}T10:00:00.000Z`, body: adf(paragraph(`Synthetic reply ${id}`)),
 }));
 const apiIssue = {
-  id: '1042', key: 'DEMO-42', names: { customfield_10001: 'Story points' },
+  id: '1042', key: 'DEMO-42', names: { customfield_10001: 'Story points', customfield_10002: '[CHART] Date of First Response' },
   fields: {
     summary: 'Synthetic API issue', issuetype: { name: 'Task' }, status: { name: 'In progress' },
     description: adf(paragraph('Synthetic API description'), {
       type: 'mediaSingle', content: [{ type: 'media', attrs: { id: 'fixture-media', alt: 'diagram.png' } }],
     }),
     customfield_10001: 8,
+    customfield_10002: '22/Oct/26 10:00 AM',
     attachment: [{ id: '7', filename: 'diagram.png', mimeType: 'image/png', size: 321,
       content: `${fixtureOrigin}/secure/attachment/7/diagram.png?token=a%2Bb&download=1` }],
     comment: { total: 2, comments: [apiComments[0]] },
   },
+  renderedFields: { customfield_10002: '<p>22/Oct/26 10:00 AM</p>' },
 };
 const repository = { name: 'synthetic-repo', url: 'https://code.example.invalid/projects/DEMO/repos/synthetic-repo' };
+const mirror = { name: 'synthetic-mirror', url: 'https://code.example.invalid/projects/DEMO/repos/synthetic-mirror' };
+const commitHash = 'abc123456789abcdef0123456789abcdef012345';
 const apiCommit = {
-  id: 'abc123456789', displayId: 'abc1234', message: 'Synthetic commit subject\n\nFull synthetic commit body.',
-  url: `${repository.url}/commits/abc123456789`, author: { name: 'Fixture developer' },
+  id: commitHash, displayId: 'abc1234', message: 'Synthetic commit subject\n\nFull synthetic commit body.',
+  url: `${repository.url}/commits/${commitHash}`, author: { name: 'Fixture developer' },
   authorTimestamp: '2026-11-03T12:00:00Z',
 };
 const apiPullRequest = {
@@ -38,7 +42,7 @@ const apiPullRequest = {
 };
 const developmentSummary = {
   errors: [], summary: {
-    repository: { overall: { count: 1 }, byInstanceType: { stash: { count: 1, name: 'Bitbucket' } } },
+    repository: { overall: { count: 2 }, byInstanceType: { stash: { count: 2, name: 'Bitbucket' } } },
     pullrequest: { overall: { count: 1, details: { total: 1 } }, byInstanceType: { stash: { count: 1, name: 'Bitbucket' } } },
   },
 };
@@ -50,8 +54,12 @@ const fixtureHtml = `<!doctype html><html><head><title>Synthetic Jira fixture</t
     <div id="type-val">Task</div><div id="status-val">Open</div>
     <div id="description-val">
       <p>Visible <strong>description</strong> with <a href="/help?first=1&amp;second=2">query link</a>.</p>
+      <p><a href="${fixtureOrigin}/browse/DEMO-7?focusedCommentId=1#comment-1">${fixtureOrigin}/browse/DEMO-7?focusedCommentId=1#comment-1</a> and <a href="/browse/DEMO-8">Requirements</a>.</p>
       <ol start="4"><li><p>Outer item</p><ul><li>Nested item</li></ul></li></ol>
       <table><tr><th>Column</th><th>Meaning</th></tr><tr><td>literal|pipe</td><td>first<br>second</td></tr></table>
+      <h2>Acceptance criteria</h2>
+      <p><strong>AC1: Keep the context</strong></p>
+      <table><tr><td></td><td></td></tr><tr><td>Given</td><td>An open issue</td></tr><tr><td>When</td><td>I copy the issue</td></tr><tr><td>Then</td><td>The description stays <strong>readable</strong></td></tr></table>
       <pre><code class="language-js">const sample = 1;
 \`\`\`</code></pre>
       <button>Do not export this control</button>
@@ -102,7 +110,10 @@ try {
         const type = url.searchParams.get('dataType');
         assert.ok(['repository', 'pullrequest'].includes(type));
         body = JSON.stringify({ errors: [], detail: [type === 'repository'
-          ? { repositories: [{ ...repository, commits: [apiCommit, apiCommit] }] }
+          ? { repositories: [
+            { ...repository, commits: [apiCommit, apiCommit] },
+            { ...mirror, commits: [{ ...apiCommit, url: `${mirror.url}/commits/${commitHash}` }] },
+          ] }
           : { pullRequests: [apiPullRequest, apiPullRequest], repositories: [] }] });
       } else {
         status = 404;
@@ -160,25 +171,33 @@ try {
   }
 
   let opened = await popup();
-  assert.match(opened.markdown, /^# DEMO-42 — Synthetic API issue/m);
+  assert.ok(opened.markdown.startsWith(`# [DEMO-42](${fixtureUrl}) — Synthetic API issue\n`));
   assert.match(opened.markdown, /Synthetic API description/);
   assert.match(opened.markdown, /Synthetic reply 1/);
   assert.match(opened.markdown, /Synthetic reply 2/);
+  assert.match(opened.markdown, /### Fixture author 1 — 1 Nov 2026, 10:00 UTC/);
   assert.equal(opened.markdown.match(/Synthetic reply 1/g)?.length, 1, 'Embedded and fetched comments must be deduplicated');
   assert.match(opened.markdown, /!\[diagram\.png\]\(https:\/\/demo\.atlassian\.net\/secure\/attachment\/7\/diagram\.png\?token=a%2Bb&download=1\)/);
   assert.match(opened.markdown, /^## Commits$/m);
-  assert.match(opened.markdown, /https:\/\/code\.example\.invalid\/projects\/DEMO\/repos\/synthetic-repo\/commits\/abc123456789/);
+  assert.ok(opened.markdown.includes(`${repository.url}/commits/${commitHash}`));
+  assert.ok(opened.markdown.includes(`${mirror.url}/commits/${commitHash}`));
+  assert.match(opened.markdown, /^\| Commit \| Subject \| Date \(UTC\) \| Repositories \|$/m);
   assert.match(opened.markdown, /Synthetic commit subject\n\nFull synthetic commit body\./);
   assert.match(opened.markdown, /Fixture developer/);
   assert.match(opened.markdown, /^## Pull requests$/m);
+  assert.match(opened.markdown, /^\| PR \| Title \| Status \| Repository \|$/m);
   assert.match(opened.markdown, /https:\/\/code\.example\.invalid\/projects\/DEMO\/repos\/synthetic-repo\/pull-requests\/123/);
-  assert.match(opened.markdown, /MERGED/);
+  assert.match(opened.markdown, /\| Merged \|/);
   assert.match(opened.markdown, /feature\/DEMO-42/);
   assert.match(opened.markdown, /main/);
-  assert.equal(opened.markdown.match(/Synthetic commit subject/g)?.length, 1, 'Repeated development commits must be deduplicated');
+  assert.equal(opened.markdown.split('\n').filter(line => line.startsWith('| `abc1234` |')).length, 1, 'Repeated hashes across repositories must share one commit table row');
+  assert.equal(opened.markdown.match(/Synthetic commit subject/g)?.length, 2, 'The subject belongs in the table and the preserved full message');
   assert.equal(opened.markdown.match(/Synthetic pull request/g)?.length, 1, 'Repeated pull requests must be deduplicated');
-  assert.match(await browser.evaluate(opened.sessionId, 'document.querySelector("#issue-counts").textContent'), /1 commits.*1 PRs/);
-  assert.ok(!opened.markdown.includes('Additional fields'));
+  assert.match(await browser.evaluate(opened.sessionId, 'document.querySelector("#issue-counts").textContent'), /1 commit · 1 PR/);
+  assert.ok(!opened.markdown.includes('| Story points |'), 'Opt-in custom fields remain excluded by default');
+  assert.match(opened.markdown, /^## Additional fields$/m);
+  assert.match(opened.markdown, /\| \\\[CHART\\\] Date of First Response \| 22 Oct 2026, 10:00 AM — time zone unspecified \|/);
+  assert.ok(!opened.markdown.includes('## \\[CHART\\] Date of First Response'), 'A one-paragraph scalar field belongs in the fields table');
   assert.deepEqual(requests.filter(request => request.url.includes('/comment?')).map(request => new URL(request.url).searchParams.get('startAt')), ['0', '1']);
   assert.equal(requests.filter(request => request.url.includes('/rest/dev-status/')).length, 3, 'Development discovery fetches summary and both detail types');
   // Only the harness receives read permission, after the initial write has
@@ -236,14 +255,20 @@ try {
   await until(() => browser.evaluate(jiraSession, 'document.readyState === "complete" && Boolean(document.querySelector("#summary-val"))'), 'visible page fixture reload');
   opened = await popup();
   const visible = opened.markdown;
-  assert.match(visible, /^# DEMO-42 — Synthetic visible issue/m);
+  assert.ok(visible.startsWith(`# [DEMO-42](${fixtureUrl}) — Synthetic visible issue\n`));
   assert.match(visible, /Visible \*\*description\*\*/);
   assert.match(visible, /\[query link\]\(https:\/\/demo\.atlassian\.net\/help\?first=1&second=2\)/);
+  assert.ok(visible.includes(`[DEMO-7](${fixtureOrigin}/browse/DEMO-7?focusedCommentId=1#comment-1)`), 'Raw same-origin issue links shorten only the label');
+  assert.ok(visible.includes(`[Requirements](${fixtureOrigin}/browse/DEMO-8)`), 'Descriptive link labels stay intact');
   assert.match(visible, /4\. Outer item\n   - Nested item/);
   assert.match(visible, /\| literal\\\|pipe \| first  <br>second \|/);
+  assert.match(visible, /^### Acceptance criteria$/m, 'Source headings nest under the Description section');
+  assert.match(visible, /^#### AC1: Keep the context$/m);
+  assert.match(visible, /- \*\*Given:\*\* An open issue\n- \*\*When:\*\* I copy the issue\n- \*\*Then:\*\* The description stays \*\*readable\*\*/);
+  assert.ok(!visible.includes('| Given |'), 'Headerless acceptance tables render as labelled bullets');
   assert.match(visible, /````js\nconst sample = 1;\n```\n````/);
   assert.match(visible, /Visible \*reply\*/);
-  assert.match(visible, /Visible author — 2026-11-04T12:00:00Z/);
+  assert.match(visible, /Visible author — 4 Nov 2026, 12:00 UTC/);
   assert.match(visible, /\| Story points \| 13 \|/);
   assert.ok(!visible.includes('Hidden reply'));
   assert.ok(!visible.includes('Do not export this control'));
@@ -282,6 +307,25 @@ try {
   assert.match(inertResult, /!\[fixture\]\(https:\/\/renderer-check\.invalid\/image\.png\)/);
   assert.deepEqual(rendererRequests, [], 'Converting HTML must not load referenced remote resources');
   console.log('PASS HTML conversion makes no image, iframe, stylesheet, video, or background resource requests');
+
+  const customSections = await browser.evaluate(opened.sessionId, `(async () => {
+    const { renderIssue } = await import(chrome.runtime.getURL('src/markdown.js'));
+    return renderIssue({ key: 'DEMO-42', title: 'Custom section shapes', url: '${fixtureUrl}', sections: [
+      { name: 'List field', field: true, body: { html: '<ul><li>Keep rule</li></ul>' } },
+      { name: 'Heading field', field: true, body: { html: '<h1>Keep heading</h1>' } },
+      { name: 'Strike field', field: true, body: { html: '<p><del>Removed rule</del></p>' } },
+      { name: 'Scalar field', field: true, body: { html: '<p>10</p>' } },
+    ] });
+  })()`);
+  assert.match(customSections, /## List field\n\n- Keep rule/);
+  assert.match(customSections, /## Heading field\n\n### Keep heading/);
+  assert.match(customSections, /## Strike field\n\n~~Removed rule~~/);
+  assert.match(customSections, /## Additional fields\n\n\| Field \| Value \|\n\| --- \| --- \|\n\| Scalar field \| 10 \|/);
+  assert.ok(!customSections.includes('## Scalar field'), 'Only the plain paragraph groups into Additional fields');
+  for (const name of ['List field', 'Heading field', 'Strike field']) {
+    assert.ok(!customSections.includes(`| ${name} |`), 'Structured HTML fields must keep their sections and formatting');
+  }
+  console.log('PASS plain scalar HTML fields group while lists, headings, and strikethrough keep their sections');
   console.log('Browser smoke checks passed.');
 } finally {
   await close();

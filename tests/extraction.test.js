@@ -54,11 +54,16 @@ test("reads the current issue over same-origin GET and preserves rich content an
   assert.equal(result.issue.description.adf.content[0].content[0].text, "A rich description");
   assert.equal(result.issue.description.html, "<p>A rich description</p>");
   assert.equal(result.issue.fields.find(item => item.name === "Assignee").value, "Unassigned");
-  assert.equal(result.issue.fields.find(item => item.name === "Parent").value, "TEAM-2 — Project");
+  assert.deepEqual(JSON.parse(JSON.stringify(result.issue.fields.find(item => item.name === "Parent").value)), {
+    key: "TEAM-2", title: "Project", url: "https://example.atlassian.net/browse/TEAM-2",
+  });
   assert.equal(result.issue.customFields.find(item => item.name === "Story points").value, "5");
   assert.equal(result.issue.customFields.find(item => item.name === "Choice").value, "Parent / Child");
   assert.ok(result.issue.sections.find(item => item.name === "Acceptance criteria").body.adf);
   assert.equal(result.issue.sections.find(item => item.name === "Linked issues").body.text, "blocks: TEAM-3 — Release");
+  assert.deepEqual(JSON.parse(JSON.stringify(result.issue.sections.find(item => item.name === "Linked issues").items)), [
+    { relation: "blocks", key: "TEAM-3", title: "Release", url: "https://example.atlassian.net/browse/TEAM-3" },
+  ]);
   assert.equal(result.issue.attachments[0].id, "88");
   assert.equal(result.issue.warnings, undefined);
   const api = new URL(page.requests[0].url);
@@ -71,6 +76,72 @@ test("reads the current issue over same-origin GET and preserves rich content an
     assert.equal(options.method || "GET", "GET");
     assert.equal(options.redirect, "error");
   }
+});
+
+test("issue references retain relation direction, ordering, titles and the Jira context path", async () => {
+  const page = browser({ href: "https://jira.example.test/company/browse/TEAM-42", fetch: () => response({
+    fields: {
+      summary: "Related work", comment: { comments: [], total: 0 },
+      parent: { key: "TEAM-1", fields: { summary: "Parent | original wording" }, self: "https://untrusted.example/parent" },
+      issuelinks: [
+        { type: { outward: "blocks", inward: "is blocked by" }, outwardIssue: { key: "TEAM-2", fields: { summary: "First" } } },
+        { type: { outward: "blocks", inward: "is blocked by" }, inwardIssue: { key: "TEAM-3", fields: { summary: "Second [rule]" } } },
+        { inwardIssue: { key: "OPS_2-4", fields: { summary: "Third" } } },
+        { type: { outward: "ignorable" } },
+      ],
+      subtasks: [{ key: "TEAM-5", fields: { summary: "Child" } }, { key: "TEAM-6", fields: { summary: "Next child" } }],
+    },
+  }) });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.issue.fields.find(item => item.name === "Parent").value)), {
+    key: "TEAM-1", title: "Parent | original wording", url: "https://jira.example.test/company/browse/TEAM-1",
+  });
+  const linked = result.issue.sections.find(item => item.name === "Linked issues");
+  assert.deepEqual(JSON.parse(JSON.stringify(linked.items)), [
+    { relation: "blocks", key: "TEAM-2", title: "First", url: "https://jira.example.test/company/browse/TEAM-2" },
+    { relation: "is blocked by", key: "TEAM-3", title: "Second [rule]", url: "https://jira.example.test/company/browse/TEAM-3" },
+    { relation: "relates to", key: "OPS_2-4", title: "Third", url: "https://jira.example.test/company/browse/OPS_2-4" },
+  ]);
+  assert.equal(linked.body.text, "blocks: TEAM-2 — First\nis blocked by: TEAM-3 — Second [rule]\nrelates to: OPS_2-4 — Third");
+  const subtasks = result.issue.sections.find(item => item.name === "Subtasks");
+  assert.deepEqual(JSON.parse(JSON.stringify(subtasks.items)), [
+    { key: "TEAM-5", title: "Child", url: "https://jira.example.test/company/browse/TEAM-5" },
+    { key: "TEAM-6", title: "Next child", url: "https://jira.example.test/company/browse/TEAM-6" },
+  ]);
+  assert.equal(subtasks.body.text, "TEAM-5 — Child\nTEAM-6 — Next child");
+});
+
+test("invalid issue reference keys preserve labels without creating links", async () => {
+  const page = browser({ fetch: () => response({ fields: {
+    summary: "Malformed references", comment: { comments: [], total: 0 },
+    parent: { key: "//external.example", fields: { summary: "Original parent" } },
+    issuelinks: [{ outwardIssue: { key: "../OTHER-1", fields: { summary: "Original issue" } } }],
+  } }) });
+  const result = await page.read();
+  assert.equal(result.ok, true);
+  const parent = result.issue.fields.find(item => item.name === "Parent").value;
+  assert.equal(parent.key, "//external.example");
+  assert.equal(parent.title, "Original parent");
+  assert.equal(parent.url, "");
+  const linked = result.issue.sections.find(item => item.name === "Linked issues").items[0];
+  assert.equal(linked.key, "../OTHER-1");
+  assert.equal(linked.url, "");
+});
+
+test("small custom fields remain optional data rather than ordinary sections", async () => {
+  const page = browser({ fetch: () => response({ names: {
+    customfield_100: "RoM Estimate (migrated)", customfield_101: "[CHART] Date of First Response",
+  }, fields: {
+    summary: "Small custom fields", comment: { comments: [], total: 0 },
+    customfield_100: 10, customfield_101: "22/Oct/26 10:00 AM",
+  } }) });
+  const result = await page.read();
+  assert.deepEqual(JSON.parse(JSON.stringify(result.issue.customFields)), [
+    { name: "RoM Estimate (migrated)", value: "10" },
+    { name: "[CHART] Date of First Response", value: "22/Oct/26 10:00 AM" },
+  ]);
+  assert.equal(result.issue.sections.length, 0);
 });
 
 test("selectedIssue takes precedence and digit/underscore project keys retain Jira context paths", async () => {

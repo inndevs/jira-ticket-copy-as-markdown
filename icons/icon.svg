@@ -1,10 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <title>Jira Ticket – Copy as Markdown</title>
-  <desc>A bold Markdown M with an offset copy corner on a green tile.</desc>
-  <!-- Store artwork keeps a 16px margin. The toolbar renderer crops to this tile. -->
-  <g transform="translate(16 16) scale(6)">
-    <rect width="16" height="16" rx="3.5" fill="#146956"/>
-    <path d="M2.5 10.5V3.5a1 1 0 0 1 1-1h7" fill="none" stroke="#a9e4c8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M4 13V5h2l2.5 3L11 5h2v8h-2V8.2L8.5 11 6 8.2V13Z" fill="#fffef6"/>
-  </g>
+  <title>Jira to Markdown</title>
+  <desc>A white issue ticket with a Markdown M and download arrow on a blue tile.</desc>
+  <defs>
+    <linearGradient id="blue" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3685ff"/><stop offset="1" stop-color="#0755df"/>
+    </linearGradient>
+  </defs>
+  <!-- A 16px store margin is cropped away for toolbar sizes. -->
+  <rect x="16" y="16" width="96" height="96" rx="23" fill="url(#blue)"/>
+  <path d="M38 40h52a6 6 0 0 1 6 6v9a8 8 0 0 0 0 16v9a6 6 0 0 1-6 6H38a6 6 0 0 1-6-6v-9a8 8 0 0 0 0-16v-9a6 6 0 0 1 6-6Z" fill="#fff"/>
+  <path d="M46 75V52h5l6 9 6-9h5v23h-6V62l-5 7-5-7v13Z" fill="#125ee8"/>
+  <path d="M78 53v18m-5-5 5 5 5-5" fill="none" stroke="#125ee8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -4,7 +4,7 @@ import { launchChrome } from './cdp.mjs';
 const svg = await readFile(new URL('../icons/icon.svg', import.meta.url), 'utf8');
 const { page, close } = await launchChrome(['--disable-extensions']);
 try {
-  for (const size of [16, 32, 48, 128]) {
+  for (const size of [16, 32, 48, 128, 512]) {
     const result = await page.evaluate(`(async () => {
       const size = ${size};
       const source = new DOMParser().parseFromString(${JSON.stringify(svg)}, 'image/svg+xml');
@@ -32,7 +32,7 @@ try {
       }
       return { size, bounds: { left, top, right, bottom }, png: canvas.toDataURL('image/png').split(',')[1] };
     })()`);
-    const margin = size === 128 ? 16 : 0;
+    const margin = size >= 128 ? size / 8 : 0;
     if (result.bounds.left !== margin || result.bounds.top !== margin ||
       result.bounds.right !== size - margin - 1 || result.bounds.bottom !== size - margin - 1) {
       throw new Error(`Unexpected icon padding: ${JSON.stringify({ size, bounds: result.bounds })}`);

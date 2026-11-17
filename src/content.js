@@ -157,9 +157,16 @@
     return [...found.values()].sort((a, b) => a.created.localeCompare(b.created));
   }
 
-  function issueReference(issue) {
-    return [issue?.key, issue?.fields?.summary].filter(Boolean).join(" — ");
+  function issueReference(issue, current) {
+    const validKey = keyValue(issue?.key);
+    return {
+      key: validKey || String(issue?.key || ""),
+      title: String(issue?.fields?.summary || ""),
+      url: validKey ? `${current.origin}${current.context}/browse/${validKey}` : "",
+    };
   }
+
+  const referenceText = reference => [reference.key, reference.title].filter(Boolean).join(" — ");
 
   function developmentEndpoint(current, version, resource, params) {
     const url = new URL(`${current.context}/rest/dev-status/${version}/issue/${resource}`, current.origin);
@@ -279,21 +286,25 @@
       ["labels", "Labels"], ["components", "Components"], ["fixVersions", "Fix versions"], ["versions", "Affected versions"], ["security", "Security level"]
     ]) field(name, raw[id]);
     if (Object.hasOwn(raw, "assignee") && raw.assignee === null) field("Assignee", "Unassigned");
-    if (raw.parent) field("Parent", issueReference(raw.parent));
+    if (raw.parent) issue.fields.push({ name: "Parent", value: issueReference(raw.parent, current) });
     for (const [id, name] of [["originalEstimate", "Original estimate"], ["remainingEstimate", "Remaining estimate"], ["timeSpent", "Time spent"]]) field(name, raw.timetracking?.[id]);
     if (raw.environment || rendered.environment) issue.sections.push({ name: "Environment", body: rich(raw.environment, rendered.environment) });
     const linked = (raw.issuelinks || []).map(link => {
       const other = link.outwardIssue || link.inwardIssue;
       const relation = link.outwardIssue ? link.type?.outward : link.type?.inward;
-      return other ? `${relation || "relates to"}: ${issueReference(other)}` : "";
+      return other ? { relation: String(relation || "relates to"), ...issueReference(other, current) } : null;
     }).filter(Boolean);
-    if (linked.length) issue.sections.push({ name: "Linked issues", body: { text: linked.join("\n") } });
-    if (raw.subtasks?.length) issue.sections.push({ name: "Subtasks", body: { text: raw.subtasks.map(issueReference).join("\n") } });
+    if (linked.length) issue.sections.push({ name: "Linked issues", items: linked,
+      body: { text: linked.map(reference => `${reference.relation}: ${referenceText(reference)}`).join("\n") } });
+    if (raw.subtasks?.length) {
+      const subtasks = raw.subtasks.map(task => issueReference(task, current));
+      issue.sections.push({ name: "Subtasks", items: subtasks, body: { text: subtasks.map(referenceText).join("\n") } });
+    }
     for (const [id, value] of Object.entries(raw)) {
       if (!/^customfield_\d+$/.test(id) || value == null) continue;
       const name = names[id] || id;
       const body = rich(value, rendered[id]);
-      if (body.adf || body.html || (body.text && body.text.includes("\n"))) issue.sections.push({ name, body });
+      if (body.adf || body.html || (body.text && body.text.includes("\n"))) issue.sections.push({ name, body, field: true });
       else { const readable = display(value); if (readable) issue.customFields.push({ name, value: readable }); }
     }
     issue.attachments = (raw.attachment || []).map(item => {

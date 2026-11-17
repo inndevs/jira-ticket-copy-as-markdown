@@ -1,6 +1,6 @@
 # Privacy
 
-Jira Ticket – Copy as Markdown is maintained by inndevs. Updated November 16, 2026.
+Jira to Markdown is maintained by inndevs. Updated November 17, 2026.
 
 Opening the extension reads the current Jira issue and copies Markdown. Data includes the issue URL, title, description, fields, comments, names, attachment links, and linked commits and pull requests, including messages, authors, repositories, branches, and statuses. Issue content may contain personal information. Export options affect the output; available issue data is read regardless of those options.
 

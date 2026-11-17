@@ -68,6 +68,28 @@ try {
   const { data } = await page.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   await writeFile(join(root, 'store/screenshot-1280x800.png'), Buffer.from(data, 'base64'));
   console.log(`Rendered store/screenshot-1280x800.png: ${JSON.stringify(dimensions)}`);
+
+  await page.call('Emulation.setDeviceMetricsOverride', { width: 440, height: 280, deviceScaleFactor: 1, mobile: false });
+  await page.call('Page.navigate', { url: `${origin}/store/promo.html` });
+  await until(() => page.evaluate(`document.body?.dataset.asset === 'promo' &&
+    [...document.images].every(image => image.complete && image.naturalWidth > 0)`), 'promotional tile');
+  await page.evaluate('document.fonts.ready.then(() => true)');
+  const promo = await page.evaluate(`({
+    width: innerWidth, height: innerHeight,
+    overflow: document.body.scrollWidth > innerWidth || document.body.scrollHeight > innerHeight,
+    clipped: [...document.querySelectorAll('[data-fit]')].some(element => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.left < 0 || bounds.top < 0 || bounds.right > innerWidth || bounds.bottom > innerHeight ||
+        element.scrollWidth > element.clientWidth;
+    }),
+    title: document.querySelector('h1').textContent,
+  })`);
+  if (promo.width !== 440 || promo.height !== 280 || promo.overflow || promo.clipped || promo.title !== 'Copy Jira.Paste Markdown.') {
+    throw new Error(`Promotional tile verification failed: ${JSON.stringify(promo)}`);
+  }
+  const { data: promoData } = await page.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  await writeFile(join(root, 'store/promo-440x280.png'), Buffer.from(promoData, 'base64'));
+  console.log(`Rendered store/promo-440x280.png: ${JSON.stringify(promo)}`);
 } finally {
   await chrome?.close();
   await new Promise(resolve => server.close(resolve));

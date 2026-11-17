@@ -1,63 +1,11 @@
+import { array, string, blocks, escapeText, oneLine, resolveUrl, link, wrap, codeSpan, codeBlock, table, formatDate } from "./format.js";
+import { renderCommits, renderPullRequests } from "./development.js";
+
 const DEFAULT_OPTIONS = {
   description: true, comments: true, metadata: true,
   attachments: true, fields: false, sections: true,
   commits: true, pullRequests: true,
 };
-
-const array = (value) => Array.isArray(value) ? value : [];
-const string = (value) => value == null ? "" : String(value);
-const blocks = (values) => values.filter((value) => value && value.trim()).join("\n\n");
-
-function escapeText(value) {
-  return string(value).replace(/\r\n?/g, "\n")
-    .replace(/&(?=(?:#[0-9]+|#x[0-9a-f]+|[a-z][a-z0-9]+);)/gi, "&amp;")
-    .replace(/[\\`*_{}\[\]<>#|~!]/g, "\\$&")
-    .replace(/(^|\n)(\s*)([-+])(?=\s)/g, "$1$2\\$3")
-    .replace(/(^|\n)([ \t]{0,3})(-+|=+|\+)(?=[ \t]*(?:\n|$))/g, "$1$2\\$3")
-    .replace(/(^|\n)(\s*\d+)([.)])(?=\s)/g, "$1$2\\$3");
-}
-
-function oneLine(value) {
-  return escapeText(string(value).replace(/\s+/g, " ").trim());
-}
-
-function resolveUrl(value, baseUrl) {
-  if (!value) return "";
-  try {
-    const url = new URL(string(value), baseUrl || undefined);
-    if (!["http:", "https:", "mailto:", "tel:"].includes(url.protocol)) return "";
-    return url.href.replace(/[<>()\\\s]/g, (character) =>
-      `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
-  } catch {
-    return "";
-  }
-}
-
-function link(label, href, context) {
-  const url = resolveUrl(href, context.baseUrl);
-  return url ? `[${label || escapeText(href)}](${url})` : label;
-}
-
-function wrap(value, delimiter) {
-  const [, leading, core, trailing] = /^(\s*)([\s\S]*?)(\s*)$/.exec(value);
-  return core ? `${leading}${delimiter}${core}${delimiter}${trailing}` : value;
-}
-
-function codeSpan(value) {
-  const text = string(value).replace(/\r?\n/g, " ");
-  const longest = Math.max(0, ...(text.match(/`+/g) || []).map((run) => run.length));
-  const fence = "`".repeat(longest + 1);
-  const padding = /^`|`$/.test(text) || (/^ .* $/.test(text) && /\S/.test(text)) ? " " : "";
-  return `${fence}${padding}${text}${padding}${fence}`;
-}
-
-function codeBlock(value, language = "") {
-  const text = string(value).replace(/\r\n?/g, "\n");
-  const longest = Math.max(2, ...(text.match(/`+/g) || []).map((run) => run.length));
-  const fence = "`".repeat(longest + 1);
-  const info = string(language).replace(/[^a-zA-Z0-9_+.#-]/g, "");
-  return `${fence}${info}\n${text}${text.endsWith("\n") ? "" : "\n"}${fence}`;
-}
 
 function applyMarks(value, marks, context, rawText) {
   const supported = array(marks);
@@ -87,33 +35,24 @@ function listItem(value, marker) {
     line ? `${" ".repeat(marker.length)}${line}` : "").join("\n");
 }
 
-function table(rows) {
-  if (!rows.length) return "";
-  const grid = [];
-  let hasHeader = false;
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-    const row = grid[rowIndex] ||= [];
-    let column = 0;
-    for (const cell of rows[rowIndex]) {
-      while (row[column] !== undefined) column++;
-      const width = Math.min(100, Math.max(1, Number(cell.colspan) || 1));
-      const height = Math.min(rows.length - rowIndex, Math.max(1, Number(cell.rowspan) || 1));
-      row[column] = cell.text.trim().replace(/(?<!\\)\|/g, "\\|").replace(/\r?\n+/g, "<br>");
-      if (rowIndex === 0 && cell.header) hasHeader = true;
-      for (let y = 0; y < height; y++) {
-        const covered = grid[rowIndex + y] ||= [];
-        for (let x = 0; x < width; x++) {
-          if (x || y) covered[column + x] = "";
-        }
-      }
-      column += width;
-    }
-  }
-  const width = Math.max(...grid.map((row) => row.length));
-  if (!width) return "";
-  const renderRow = (row) => `| ${Array.from({ length: width }, (_, index) => row[index] || "").join(" | ")} |`;
-  const header = hasHeader ? grid.shift() : [];
-  return [renderRow(header), renderRow(Array(width).fill("---")), ...grid.map(renderRow)].join("\n");
+function contentTable(rows) {
+  const data = rows.filter(row => row.some(cell => cell.text.trim()));
+  const labels = data.map(row => row[0]?.text.replace(/\*\*/g, "").replace(/:\s*$/, "").trim());
+  const criteria = data.length >= 3 && data.every(row => row.length === 2 && row.every(cell =>
+    !cell.header && !(cell.colspan > 1) && !(cell.rowspan > 1))) &&
+    /^(given|gegeben)$/i.test(labels[0]) && labels.some(label => /^(when|wenn)$/i.test(label)) &&
+    labels.some(label => /^(then|dann)$/i.test(label)) &&
+    labels.every(label => /^(given|when|then|and|but|gegeben|wenn|dann|und|aber)$/i.test(label));
+  return criteria ? data.map((row, index) => listItem(`**${labels[index]}:** ${row[1].text.trim()}`, "- ")).join("\n") : table(rows);
+}
+
+function headingLevel(level, context) {
+  return Math.min(6, Math.max(1, Number(level) || 1) + (context.headingOffset || 0));
+}
+
+function criterionHeading(value, context) {
+  return context.sectionBody && /^(?:\*\*)?(?:AK|AC)\s*\d+\s*:/i.test(value) ?
+    `#### ${value.replace(/\*\*/g, "")}` : value;
 }
 
 function media(node, context) {
@@ -154,8 +93,8 @@ function adfNode(node, context) {
     case "listItem":
     case "mediaSingle":
     case "mediaGroup": return adfChildren(node, context);
-    case "paragraph": return adfChildren(node, context, true);
-    case "heading": return `${"#".repeat(Math.min(6, Math.max(1, Number(attrs.level) || 1)))} ${adfChildren(node, context, true)}`;
+    case "paragraph": return criterionHeading(adfChildren(node, context, true), context);
+    case "heading": return `${"#".repeat(headingLevel(attrs.level, context))} ${adfChildren(node, context, true)}`;
     case "hardBreak": return "  \n";
     case "rule": return "---";
     case "codeBlock": return codeBlock(array(node.content).map((child) => child.text || "").join(""), attrs.language);
@@ -177,7 +116,7 @@ function adfNode(node, context) {
         return listItem(value, marker);
       }).join("\n");
     }
-    case "table": return table(array(node.content).map((row) => array(row.content).map((cell) => ({
+    case "table": return contentTable(array(node.content).map((row) => array(row.content).map((cell) => ({
       text: adfChildren(cell, context), header: cell.type === "tableHeader",
       colspan: cell.attrs?.colspan, rowspan: cell.attrs?.rowspan,
     }))));
@@ -200,8 +139,15 @@ function adfNode(node, context) {
   }
 }
 
-export function adfToMarkdown(doc, { baseUrl = "", attachments = [] } = {}) {
-  return adfNode(doc, { baseUrl, attachments }).trim();
+export function adfToMarkdown(doc, { baseUrl = "", attachments = [], sectionBody = false } = {}) {
+  const levels = [];
+  const visit = node => {
+    if (node?.type === "heading") levels.push(Math.max(1, Number(node.attrs?.level) || 1));
+    array(node?.content).forEach(visit);
+  };
+  visit(doc);
+  const headingOffset = sectionBody && levels.length ? Math.max(0, 3 - Math.min(...levels)) : 0;
+  return adfNode(doc, { baseUrl, attachments, sectionBody, headingOffset }).trim();
 }
 
 const HTML_BLOCKS = new Set(["P", "DIV", "SECTION", "ARTICLE", "MAIN", "HEADER", "FOOTER", "ASIDE", "NAV", "ADDRESS", "FIGURE", "FIGCAPTION", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "BLOCKQUOTE", "PRE", "TABLE", "HR", "DL", "DT", "DD"]);
@@ -227,11 +173,11 @@ function htmlNode(node, context) {
   if (node.nodeType !== 1 || HTML_IGNORE.has(node.nodeName) || node.hasAttribute("hidden") || node.getAttribute("aria-hidden") === "true") return "";
   const tag = node.nodeName;
   const inline = () => htmlChildren(node, context, true);
-  if (/^H[1-6]$/.test(tag)) return `${"#".repeat(Number(tag[1]))} ${inline().trim()}`;
+  if (/^H[1-6]$/.test(tag)) return `${"#".repeat(headingLevel(tag[1], context))} ${inline().trim()}`;
   switch (tag) {
     case "BR": return "  \n";
     case "HR": return "---";
-    case "P": return inline().trim();
+    case "P": return criterionHeading(inline().trim(), context);
     case "STRONG":
     case "B": return wrap(inline(), "**");
     case "EM":
@@ -276,7 +222,7 @@ function htmlNode(node, context) {
     }
     case "TABLE": {
       const rows = Array.from(node.rows || []).filter((row) => row.closest("table") === node);
-      return table(rows.map((row) => Array.from(row.cells).map((cell) => ({
+      return contentTable(rows.map((row) => Array.from(row.cells).map((cell) => ({
         text: htmlChildren(cell, context), header: cell.nodeName === "TH", colspan: cell.colSpan, rowspan: cell.rowSpan,
       }))));
     }
@@ -286,9 +232,11 @@ function htmlNode(node, context) {
   }
 }
 
-export function htmlToMarkdown(html, { baseUrl = "" } = {}) {
+export function htmlToMarkdown(html, { baseUrl = "", sectionBody = false } = {}) {
   const document = new DOMParser().parseFromString(string(html), "text/html");
-  return htmlChildren(document.body, { baseUrl }).trim();
+  const levels = Array.from(document.body.querySelectorAll("h1,h2,h3,h4,h5,h6"), node => Number(node.nodeName[1]));
+  const headingOffset = sectionBody && levels.length ? Math.max(0, 3 - Math.min(...levels)) : 0;
+  return htmlChildren(document.body, { baseUrl, sectionBody, headingOffset }).trim();
 }
 
 function bodyToMarkdown(body, context) {
@@ -302,6 +250,7 @@ function fieldValue(value, context) {
   if (value == null) return "";
   if (Array.isArray(value)) return value.map((item) => fieldValue(item, context)).filter(Boolean).join(", ");
   if (typeof value === "object") {
+    if (value.key) return issueReference(value, context);
     if (value.type === "doc") return adfToMarkdown(value, context);
     if (value.adf || value.html || value.text != null) return bodyToMarkdown(value, context);
     if (value.displayName != null || value.name != null || value.value != null) return fieldValue(value.displayName ?? value.name ?? value.value, context);
@@ -310,54 +259,110 @@ function fieldValue(value, context) {
   return escapeText(value);
 }
 
+function issueReference(value, context) {
+  const key = link(oneLine(value.key), value.url, context);
+  return [key, oneLine(value.title)].filter(Boolean).join(" — ");
+}
+
+function readableField(field, context) {
+  const value = fieldValue(field.value, context);
+  const raw = typeof field.value === "object" ? field.value?.text : field.value;
+  const date = typeof raw === "string" ? formatDate(raw) : raw;
+  return date !== raw ? oneLine(date) : value;
+}
+
 function fieldsTable(fields, context) {
   fields = array(fields);
   if (!fields.length) return "";
   return table([
     [{ text: "Field", header: true }, { text: "Value", header: true }],
-    ...fields.map((field) => [{ text: oneLine(field.name) }, { text: fieldValue(field.value, context) }]),
+    ...fields.map((field) => [{ text: oneLine(field.name) }, { text: readableField(field, context) }]),
   ]);
+}
+
+function metadata(fields, context) {
+  const remaining = array(fields).map(field => ({ ...field }));
+  const take = name => {
+    const index = remaining.findIndex(field => field.name === name);
+    return index < 0 ? null : remaining.splice(index, 1)[0];
+  };
+  const summary = ["Status", "Resolution", "Type", "Priority"].map(take).filter(Boolean)
+    .map(field => readableField(field, context)).filter(Boolean).join(" · ");
+  const reporter = remaining.find(field => field.name === "Reporter");
+  const creator = remaining.find(field => field.name === "Creator");
+  if (reporter && creator && fieldValue(reporter.value, context) === fieldValue(creator.value, context)) {
+    reporter.name = "Reporter / Creator";
+    take("Creator");
+  }
+  return { summary: summary ? `**${summary}**` : "", fields: remaining };
+}
+
+function attachmentSize(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "";
+  const exact = value.toLocaleString("en-US");
+  if (value < 1000) return ` — ${exact} bytes`;
+  const unit = Math.min(3, Math.floor(Math.log10(value) / 3));
+  return ` — ${(value / 1000 ** unit).toFixed(1)} ${["bytes", "kB", "MB", "GB"][unit]} (${exact} bytes)`;
+}
+
+function scalarSection(item, context) {
+  if (!item.field) return null;
+  const body = item.body;
+  let value;
+  if (body?.adf && adfToMarkdown(body.adf, context)) {
+    const nodes = array(body.adf.content);
+    const paragraph = nodes[0];
+    if (nodes.length !== 1 || paragraph.type !== "paragraph" || array(paragraph.content).some(node =>
+      node.type !== "text" || array(node.marks).length)) return null;
+    value = array(paragraph.content).map(node => string(node.text)).join("");
+  } else if (body?.html && htmlToMarkdown(body.html, context)) {
+    const document = new DOMParser().parseFromString(body.html, "text/html");
+    const nodes = Array.from(document.body.childNodes).filter(node => node.textContent.trim());
+    const node = nodes[0];
+    if (nodes.length !== 1 || (node.nodeType !== 3 &&
+      (node.nodeName !== "P" || Array.from(node.childNodes).some(child => child.nodeType !== 3)))) return null;
+    value = node.textContent;
+  } else value = typeof body === "string" ? body : body?.text;
+  return typeof value === "string" && value.trim() && !value.includes("\n") ? value : null;
 }
 
 export function renderIssue(issue = {}, options = {}) {
   const include = { ...DEFAULT_OPTIONS, ...options };
-  const context = { baseUrl: issue.url || "", attachments: array(issue.attachments) };
-  const heading = [issue.key, issue.title].filter(Boolean).join(" — ") || "Jira issue";
-  const output = [`# ${oneLine(heading)}`, `Source: ${link(oneLine(issue.url || "Source unavailable"), issue.url, context)}`];
+  const context = { baseUrl: issue.url || "", attachments: array(issue.attachments), sectionBody: true };
+  const heading = [issue.key ? link(oneLine(issue.key), issue.url, context) : "", oneLine(issue.title)].filter(Boolean).join(" — ") || "Jira issue";
+  const output = [`# ${heading}`];
+  if (!issue.key) output.push(`Source: ${link(oneLine(issue.url || "Source unavailable"), issue.url, context)}`);
   const section = (name, value) => { if (value) output.push(`## ${oneLine(name)}\n\n${value}`); };
-  if (include.metadata) section("Details", fieldsTable(issue.fields, context));
-  if (include.description) section("Description", bodyToMarkdown(issue.description, context));
-  if (include.fields) section("Additional fields", fieldsTable(issue.customFields, context));
-  if (include.sections) {
-    for (const item of array(issue.sections)) section(item.name || "Section", bodyToMarkdown(item.body, context));
+  if (include.metadata) {
+    const details = metadata(issue.fields, context);
+    if (details.summary) output.push(details.summary);
+    section("Details", fieldsTable(details.fields, context));
   }
+  if (include.description) section("Description", bodyToMarkdown(issue.description, context));
+  const additional = include.fields ? [...array(issue.customFields)] : [];
+  if (include.sections) {
+    for (const item of array(issue.sections)) {
+      const scalar = scalarSection(item, context);
+      if (array(item.items).length) {
+        section(item.name || "Section", item.items.map(reference => `- ${reference.relation ? `**${oneLine(reference.relation)}:** ` : ""}${issueReference(reference, context)}`).join("\n"));
+      } else if (scalar !== null) {
+        additional.push({ name: item.name || "Section", value: scalar });
+      } else section(item.name || "Section", bodyToMarkdown(item.body, context));
+    }
+  }
+  section("Additional fields", fieldsTable(additional, context));
   if (include.attachments) {
     section("Attachments", context.attachments.map((attachment) => {
       const name = oneLine(attachment.name || "Attachment");
-      const size = typeof attachment.size === "number" && Number.isFinite(attachment.size) ? ` (${attachment.size} bytes)` : "";
-      return `- ${link(name, attachment.url, context)}${size}`;
+      return `- ${link(name, attachment.url, context)}${attachmentSize(attachment.size)}`;
     }).join("\n"));
   }
-  if (include.commits) {
-    section("Commits", array(issue.commits).map((commit) => {
-      const heading = link(oneLine(commit.displayId || commit.id || "Commit"), commit.url, context);
-      const details = [commit.repository, commit.author, commit.date].filter(Boolean).map(oneLine).join(" · ");
-      return blocks([`### ${heading}`, details, escapeText(commit.message).trim()]);
-    }).join("\n\n"));
-  }
-  if (include.pullRequests) {
-    section("Pull requests", array(issue.pullRequests).map((request) => {
-      const label = [request.id ? `#${string(request.id).replace(/^#/, "")}` : "", request.title].filter(Boolean).join(" — ") || "Pull request";
-      const heading = link(oneLine(label), request.url, context);
-      const details = [request.status, request.author, request.repository].filter(Boolean).map(oneLine).join(" · ");
-      const branches = [request.sourceBranch, request.destinationBranch].filter(Boolean).map(oneLine).join(" → ");
-      return blocks([`### ${heading}`, details, branches ? `Branches: ${branches}` : ""]);
-    }).join("\n\n"));
-  }
+  if (include.pullRequests) section("Pull requests", renderPullRequests(issue.pullRequests, context));
+  if (include.commits) section("Commits", renderCommits(issue.commits, context));
   if (include.comments) {
     section("Comments", array(issue.comments).map((comment) => {
       const author = typeof comment.author === "object" ? comment.author?.displayName || comment.author?.name : comment.author;
-      const heading = [author || "Unknown author", comment.created].filter(Boolean).map(oneLine).join(" — ");
+      const heading = [author || "Unknown author", formatDate(comment.created)].filter(Boolean).map(oneLine).join(" — ");
       return `### ${heading}\n\n${bodyToMarkdown(comment.body, context) || "(Empty comment)"}`;
     }).join("\n\n"));
   }

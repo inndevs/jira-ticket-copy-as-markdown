@@ -1,10 +1,10 @@
-# Jira Ticket – Copy as Markdown
+# Jira to Markdown
 
 **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/bnlaogkehajaoilnnhamjebnmgiihncm)**
 
 Click the extension on an HTTPS Jira issue to copy it as Markdown. Choose which details to include, then click **Copy Markdown** to update the clipboard. Options are saved locally; **View Markdown** shows the output.
 
-Linked commits and pull requests are included by default, with repository names, authors, full commit messages, PR statuses, and links. Each has its own export option. Development data is read through Jira; warnings flag partial results.
+Commits and pull requests appear in compact tables with repository links. Repeated commit hashes are combined across repositories; full messages, authors, and PR branches remain available in expandable sections. Readable dates, linked issue keys, and clear acceptance criteria keep the export easy to scan. Each content option is saved locally. Warnings flag partial results.
 
 ![Extension popup and Markdown output](store/screenshot-1280x800.png)
 
