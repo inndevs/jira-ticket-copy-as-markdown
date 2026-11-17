@@ -9,7 +9,7 @@ const issue = JSON.parse(await readFile(join(root, 'store/demo-issue.json'), 'ut
 if (issue.key !== 'DEMO-42' || issue.url !== 'https://jira.example.org/browse/DEMO-42') {
   throw new Error('Store assets require the fictional DEMO-42 fixture.');
 }
-const contentTypes = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
+const contentTypes = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const server = createServer(async (request, response) => {
   try {
     const path = resolve(root, `.${decodeURIComponent(new URL(request.url, 'http://localhost').pathname)}`);
@@ -48,6 +48,8 @@ try {
   });
   await page.call('Page.navigate', { url: `${origin}/store/screenshot.html` });
   await until(() => page.evaluate('window.prepareScreenshot?.()'), 'popup copy');
+  await until(() => page.evaluate(`[...document.images, ...document.getElementById('popup').contentDocument.images]
+    .every(image => image.complete && image.naturalWidth > 0)`), 'screenshot logos');
   const dimensions = await page.evaluate(`(() => {
     const frame = document.getElementById('popup');
     const shell = document.querySelector('.popup-shell').getBoundingClientRect();

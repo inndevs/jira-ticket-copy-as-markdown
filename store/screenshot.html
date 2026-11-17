@@ -3,62 +3,109 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Jira to Markdown — fictional store demo</title>
+  <title>Jira to Markdown — fictional Jira workspace</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #10203d; background: #f0f5ff; }
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172b4d; background: #eef2f8; }
     * { box-sizing: border-box; }
     body { width: 1280px; height: 800px; margin: 0; overflow: hidden; }
-    .canvas { position: relative; width: 100%; height: 100%; padding: 39px 58px; background: radial-gradient(ellipse at 86% 2%, #d7e5ff 0%, transparent 48%), radial-gradient(ellipse at 5% 91%, #e2eaff 0%, transparent 50%); }
-    .brand { display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 700; letter-spacing: -.4px; }
-    .brand img { width: 39px; height: 39px; }
-    h1 { margin: 31px 0 15px; font-size: 65px; line-height: 1.055; letter-spacing: -3.5px; font-weight: 750; }
-    h1 span { color: #1262ed; }
-    .intro { margin: 0; font-size: 19px; line-height: 1.5; color: #566782; letter-spacing: -.25px; }
-    .preview { position: absolute; left: 64px; top: 353px; width: 697px; height: 350px; padding: 24px 26px; background: #fff; border: 1px solid #d6e0f2; border-radius: 17px; box-shadow: 0 16px 44px #1c438910, 0 2px 4px #1c438904; }
-    .preview-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #70819e; }
-    .markdown-mark { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; line-height: 18px; letter-spacing: -.8px; color: #1262ed; }
-    .preview h2 { margin: 0 0 9px; font-size: 19px; line-height: 1.3; letter-spacing: -.5px; font-weight: 700; }
-    .preview h2 .issue-key { color: #1262ed; }
-    .preview h3 { margin: 15px 0 8px; color: #283e5f; font-size: 12px; font-weight: 700; }
-    .preview p { margin: 0; font-size: 12px; line-height: 1.5; color: #63738b; }
-    .preview table { width: 100%; border-collapse: collapse; font-size: 10px; line-height: 1.35; color: #435571; table-layout: auto; }
-    .preview th { padding: 7px 8px; background: #f4f7fd; text-align: left; font-weight: 650; color: #63748f; border-bottom: 1px solid #e1e8f4; white-space: nowrap; }
-    .preview th:first-child { border-radius: 5px 0 0 0; }
-    .preview th:last-child { border-radius: 0 5px 0 0; }
-    .preview td { padding: 8px; border-bottom: 1px solid #e9eef7; vertical-align: top; }
+    .canvas { position: relative; width: 100%; height: 100%; }
+    .marketing { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; background: #fff; border-bottom: 1px solid #e5e9f0; }
+    .brand { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: -.15px; }
+    .brand img { width: 23px; height: 23px; }
+    .marketing h1 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: -.3px; color: #33506e; }
+    .marketing h1 span { color: #1262ed; }
+    .browser { position: absolute; left: 20px; top: 30px; width: 1240px; height: 728px; overflow: hidden; border: 1px solid #bcc6d4; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px #243c5b12; }
+    .tabs { height: 21px; display: flex; align-items: center; gap: 7px; padding-left: 12px; background: #dfe4ec; }
+    .traffic { display: flex; gap: 5px; margin-right: 10px; }
+    .traffic i { width: 7px; height: 7px; background: #ef7167; border-radius: 50%; }
+    .traffic i:nth-child(2) { background: #edbf50; }
+    .traffic i:nth-child(3) { background: #67bd63; }
+    .tab { width: 246px; height: 19px; display: flex; gap: 7px; align-items: center; padding: 0 11px; border-radius: 7px 7px 0 0; background: #f8fafd; font-size: 8px; color: #3c4858; }
+    .tab img { width: 11px; height: 11px; }
+    .tab .close { margin-left: auto; font-size: 12px; color: #6c7888; }
+    .new-tab { color: #68768a; font-size: 14px; }
+    .toolbar { height: 32px; display: flex; gap: 11px; align-items: center; padding: 0 13px; color: #657184; background: #f8fafd; border-bottom: 1px solid #dce2ec; }
+    .toolbar .navigation { display: flex; gap: 12px; font-size: 15px; }
+    .address { height: 22px; flex: 1; border-radius: 14px; display: flex; gap: 8px; align-items: center; padding: 0 11px; font-size: 10px; color: #43526a; background: #e9edf3; }
+    .address .site-control { font-size: 13px; color: #52647b; }
+    .extension-action { width: 27px; height: 25px; display: grid; place-items: center; background: #dce8ff; border-radius: 5px; }
+    .extension-action img { width: 21px; height: 21px; }
+    .toolbar .profile { width: 19px; height: 19px; display: grid; place-items: center; border-radius: 50%; background: #6b58bb; color: #fff; font-size: 9px; }
+    .toolbar .dots { font-size: 18px; line-height: 1; }
+    .jira-nav { height: 48px; display: flex; align-items: center; gap: 19px; padding: 0 17px; border-bottom: 1px solid #dfe4ed; font-size: 11px; font-weight: 500; color: #44546f; }
+    .app-switcher { font-size: 17px; line-height: 1; color: #44546f; letter-spacing: -3px; padding-right: 4px; }
+    .jira-logo { width: 62px; height: 24px; object-fit: contain; margin-left: -7px; }
+    .jira-nav .caret { font-size: 8px; margin-left: 3px; color: #6c7b91; }
+    .create { border: 0; background: #0c66e4; color: #fff; border-radius: 3px; padding: 6px 10px; font: 600 10px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .jira-search { margin-left: auto; border: 1px solid #c6cedb; width: 156px; height: 25px; border-radius: 4px; padding: 5px 8px; color: #7a8699; font-size: 10px; }
+    .nav-avatar { border-radius: 50%; width: 25px; height: 25px; display: grid; place-items: center; background: #dcd2f8; color: #6554a4; font-size: 10px; font-weight: 700; }
+    .sidebar { position: absolute; top: 101px; bottom: 0; left: 0; width: 184px; background: #f7f8fa; border-right: 1px solid #e5e8ef; padding: 22px 14px; }
+    .project { display: flex; align-items: center; gap: 8px; margin-bottom: 27px; }
+    .project-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 5px; background: #d8e7ff; color: #0c66e4; font-size: 15px; font-weight: 700; }
+    .project strong { display: block; font-size: 11px; font-weight: 650; }
+    .project small { display: block; margin-top: 2px; font-size: 9px; color: #7a869a; }
+    .sidebar .section-label { font-size: 8px; font-weight: 700; letter-spacing: .55px; color: #7c879b; margin: 19px 0 8px 8px; }
+    .sidebar .item { display: flex; align-items: center; gap: 11px; padding: 9px 9px; margin-bottom: 3px; border-radius: 4px; font-size: 11px; color: #43546e; }
+    .sidebar .item.active { background: #e9f2ff; color: #0c66e4; font-weight: 600; }
+    .sidebar .item .glyph { width: 14px; font-size: 14px; line-height: 1; text-align: center; color: #65758b; }
+    .sidebar .item.active .glyph { color: #0c66e4; }
+    .sidebar .settings { position: absolute; left: 14px; right: 14px; bottom: 14px; border-top: 1px solid #e0e5ed; padding-top: 13px; }
+    .issue { position: absolute; left: 213px; top: 124px; width: 608px; }
+    .breadcrumb { font-size: 10px; color: #6b778c; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
+    .task-icon { width: 12px; height: 12px; display: inline-grid; place-items: center; border-radius: 2px; background: #4bade8; color: white; font-size: 8px; font-weight: 700; }
+    .issue h2 { margin: 0 0 14px; font-size: 22px; font-weight: 600; letter-spacing: -.5px; line-height: 1.25; color: #172b4d; }
+    .issue-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+    .issue-tools button { display: flex; align-items: center; gap: 5px; font: 500 10px/1.1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; border: 1px solid #d7dce5; border-radius: 4px; background: #fff; padding: 6px 8px; color: #44546f; }
+    .issue-tools .status { background: #e9f2ff; color: #0c66e4; border-color: #d8e8ff; font-weight: 650; margin-left: auto; }
+    .issue h3 { font-size: 12px; margin: 0 0 10px; font-weight: 650; color: #172b4d; }
+    .issue p { font-size: 11px; line-height: 1.6; margin: 0; color: #44546f; }
+    .issue .description { max-width: 500px; margin-bottom: 20px; }
+    .issue .attachment { display: inline-flex; align-items: center; gap: 8px; margin: 11px 0 19px; padding: 6px 10px; border: 1px solid #dfe4ed; border-radius: 5px; font-size: 10px; color: #526680; }
+    .issue .attachment span { color: #6a7a92; font-size: 9px; }
+    .activity-heading { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+    .activity-heading h3 { margin: 0; }
+    .activity-tab { font-size: 10px; color: #0c66e4; font-weight: 600; }
+    .comment { display: flex; align-items: flex-start; gap: 9px; }
+    .avatar { flex: 0 0 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: #e6ddfb; color: #6554a4; font-size: 9px; font-weight: 650; }
+    .comment .byline { margin-bottom: 3px; font-size: 10px; font-weight: 650; color: #344563; }
+    .comment time { margin-left: 8px; font-size: 9px; color: #8993a4; font-weight: 400; }
+    .comment p { font-size: 10px; color: #596a82; }
+    .preview { position: absolute; left: 228px; top: 451px; width: 613px; height: 285px; padding: 16px 18px; background: #fff; border: 1px solid #cbd8eb; border-radius: 9px; box-shadow: 0 12px 35px #12386820, 0 2px 5px #12386807; }
+    .preview-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 9px; line-height: 1; font-weight: 650; color: #6b7c98; }
+    .preview-label .notes-title { display: flex; align-items: center; gap: 6px; }
+    .preview-label .notes-title svg { width: 13px; height: 13px; color: #1262ed; }
+    .markdown-mark { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; letter-spacing: -.8px; color: #2d486a; }
+    .preview h2 { margin: 0 0 6px; font-size: 15px; line-height: 1.3; letter-spacing: -.35px; font-weight: 650; }
+    .preview h3 { margin: 10px 0 5px; color: #283e5f; font-size: 10px; font-weight: 650; }
+    .preview p { margin: 0; font-size: 10px; line-height: 1.4; color: #63738b; }
+    .preview table { width: 100%; border-collapse: collapse; font-size: 9px; line-height: 1.35; color: #435571; table-layout: auto; }
+    .preview th { padding: 5px 6px; background: #f3f6fc; text-align: left; font-weight: 600; color: #63748f; border-bottom: 1px solid #e1e8f4; white-space: nowrap; }
+    .preview td { padding: 6px; border-bottom: 1px solid #e9eef7; vertical-align: top; }
     .preview td:first-child { white-space: nowrap; }
     .preview a { color: #1262ed; text-decoration: none; }
-    .preview code { font: 10px/1.35 ui-monospace, SFMono-Regular, monospace; }
-    .popup-shell { position: absolute; top: 86px; left: 834px; width: 382px; overflow: hidden; border: 1px solid #cbd8ee; border-radius: 17px; background: #f7f9fe; box-shadow: 0 26px 65px #16366c20, 0 3px 8px #16366c08; }
+    .preview code { font: 9px/1.35 ui-monospace, SFMono-Regular, monospace; }
+    .popup-shell { position: absolute; top: 84px; left: 866px; width: 382px; overflow: hidden; border: 1px solid #b9c7da; border-radius: 0 0 10px 10px; background: #f7f9fe; box-shadow: 0 12px 38px #10294d30, 0 2px 5px #10294d12; }
     iframe { display: block; width: 380px; height: 650px; border: 0; background: #f7f9fe; }
-    .popup-label { position: absolute; top: 59px; left: 836px; margin: 0; font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: 1.4px; color: #71839f; text-transform: uppercase; }
-    .connector { position: absolute; left: 780px; top: 478px; color: #3474e9; }
-    .connector svg { width: 29px; height: 29px; }
-    .benefit { position: absolute; left: 65px; top: 722px; display: flex; gap: 8px; align-items: center; font-size: 13px; color: #405c89; }
-    .benefit svg { width: 17px; height: 17px; color: #1262ed; }
-    footer { position: absolute; bottom: 24px; left: 65px; right: 65px; display: flex; justify-content: space-between; font-size: 10px; letter-spacing: .1px; color: #8594ab; }
-    footer span:last-child { font-weight: 700; color: #5d7499; }
+    footer { position: absolute; bottom: 16px; left: 28px; right: 28px; display: flex; justify-content: space-between; font-size: 10px; color: #7f8da3; }
+    footer .maker { color: #526b8e; font-weight: 650; }
   </style>
 </head>
 <body>
   <main class="canvas">
-    <div class="brand"><img src="../icons/icon128.png" alt="">Jira to Markdown</div>
-    <h1>Copy Jira.<br><span>Paste Markdown.</span></h1>
-    <p class="intro">The issue, the discussion, the code.<br>Ready for your notes, docs, and AI tools.</p>
-    <article class="preview" aria-label="Formatted excerpt from the generated Markdown">
-      <div class="preview-label"><span>Your Markdown, ready to paste</span><span class="markdown-mark" aria-hidden="true">[M↓]</span></div>
-      <h2 id="output-title"></h2>
-      <p id="output-description"></p>
-      <h3>Pull requests</h3>
-      <div id="output-pull-requests"></div>
-      <h3>Commits</h3>
-      <div id="output-commits"></div>
+    <div class="marketing"><div class="brand"><img src="../icons/icon128.png" alt="">Jira to Markdown</div><h1>Copy Jira. <span>Paste Markdown.</span></h1></div>
+    <div class="browser" aria-label="Fictional Jira workspace in a Chrome browser">
+      <div class="tabs"><div class="traffic"><i></i><i></i><i></i></div><div class="tab"><img src="assets/jira-icon.svg" alt="">DEMO-42 · Refresh the project handbook<span class="close">×</span></div><span class="new-tab">+</span></div>
+      <div class="toolbar"><div class="navigation"><span>‹</span><span>›</span><span>⟳</span></div><div class="address"><span class="site-control">⊜</span>jira.example.org/browse/DEMO-42</div><div class="extension-action"><img src="../icons/icon32.png" alt="Jira to Markdown extension"></div><span>♧</span><span class="profile">D</span><span class="dots">⋮</span></div>
+      <nav class="jira-nav" aria-label="Demo Jira navigation"><span class="app-switcher">⠿</span><img class="jira-logo" src="assets/jira-logo.svg" alt="Jira"><span>Your work<span class="caret">⌄</span></span><span>Projects<span class="caret">⌄</span></span><span>Filters<span class="caret">⌄</span></span><span>Dashboards<span class="caret">⌄</span></span><span>Teams<span class="caret">⌄</span></span><span>Apps<span class="caret">⌄</span></span><button class="create">Create</button><div class="jira-search">⌕ &nbsp; Search</div><span>?</span><span class="nav-avatar">DT</span></nav>
+      <aside class="sidebar"><div class="project"><div class="project-icon">D</div><div><strong>Demo workspace</strong><small>Software project</small></div></div><div class="section-label">PLANNING</div><div class="item"><span class="glyph">▦</span>Summary</div><div class="item"><span class="glyph">☷</span>Backlog</div><div class="item"><span class="glyph">▤</span>Board</div><div class="item active"><span class="glyph">✓</span>Issues</div><div class="item"><span class="glyph">▱</span>Calendar</div><div class="section-label">DEVELOPMENT</div><div class="item"><span class="glyph">⌘</span>Code</div><div class="item"><span class="glyph">↗</span>Releases</div><div class="item"><span class="glyph">▧</span>Project pages</div><div class="settings item"><span class="glyph">⚙</span>Project settings</div></aside>
+      <section class="issue"><div class="breadcrumb">Projects <span>/</span> Demo workspace <span>/</span><span class="task-icon">✓</span> DEMO-42</div><h2>Refresh the project handbook</h2><div class="issue-tools"><button>＋ Attach</button><button>⌁ Link issue</button><button>···</button><button class="status">In progress ⌄</button></div><h3>Description</h3><p class="description">Make answers easier to find. Keep the release checklist close.</p><div class="attachment">▤ &nbsp; handbook-outline.pdf <span>18.4 kB</span></div><div class="activity-heading"><h3>Activity</h3><span class="activity-tab">Comments</span><span style="font-size:10px;color:#7a8699">History</span></div><div class="comment"><div class="avatar">DT</div><div><div class="byline">Demo teammate<time>15 Jan 2026</time></div><p>The draft is ready for a review.</p></div></div></section>
+    </div>
+    <article class="preview" aria-label="Formatted excerpt from the copied Markdown">
+      <div class="preview-label"><span class="notes-title"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4 2h6l3 3v9H3V2Z"/><path d="M9 2v4h4M5 8h6M5 10h6"/></svg>Pasted Markdown</span><span class="markdown-mark" aria-hidden="true">[M↓]</span></div>
+      <h2 id="output-title"></h2><p id="output-description"></p><h3>Pull requests</h3><div id="output-pull-requests"></div><h3>Commits</h3><div id="output-commits"></div>
     </article>
-    <div class="connector" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4m6-6-6 6 6 6"/></svg></div>
-    <p class="popup-label">One click. All the context.</p>
     <div class="popup-shell"><iframe id="popup" src="../popup.html" title="Actual Jira to Markdown popup, with fictional issue data"></iframe></div>
-    <div class="benefit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>Choose what to include. Your preferences stay saved.</div>
-    <footer><span>Fictional example · Actual extension interface</span><span>inndevs</span></footer>
+    <footer><span>Demo Jira workspace · Actual extension popup</span><span class="maker">inndevs</span></footer>
   </main>
   <script>
     const iframe = document.getElementById('popup');
